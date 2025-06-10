@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  
+  /* Paleta de Cemex en formato v4.0 */
+  --color-dark-blue-50: oklch(0.98 0.02 265.75);
+  --color-dark-blue-100: oklch(0.95 0.05 265.75);
+  --color-dark-blue-200: oklch(0.88 0.08 265.75);
+  --color-dark-blue-300: oklch(0.75 0.15 265.75);
+  --color-dark-blue-400: oklch(0.65 0.2 265.75);
+  --color-dark-blue-500: oklch(0.55 0.25 265.75);
+  --color-dark-blue-600: oklch(0.45 0.3 265.75);
+  --color-dark-blue-700: oklch(0.35 0.35 265.75);
+  --color-dark-blue-800: oklch(0.25 0.4 265.75);
+  --color-dark-blue-900: oklch(0.15 0.45 265.75);
+  --color-dark-blue-950: oklch(0.08 0.5 265.75);
+  
+  /* Colores complementarios Cemex */
+  --color-cemex-primary: oklch(0.35 0.35 265.75);
+  --color-cemex-secondary: oklch(0.08 0.5 265.75);
+  --color-cemex-accent: oklch(0.55 0.25 265.75);
+  --color-cemex-light: oklch(0.98 0.02 265.75);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-dark-blue-700 hover:bg-dark-blue-800 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-dark-blue-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+  }
+  
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-blue-500 focus:border-transparent;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md border border-gray-200;
+  }
+  
+  .nav-link {
+    @apply flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-dark-blue-50 hover:text-dark-blue-700 transition-colors duration-200;
+  }
+  
+  .nav-link.active {
+    @apply bg-dark-blue-100 text-dark-blue-800 font-medium;
+  }
+}
