@@ -1,1 +1,5 @@
-/venv/
+# Archivos de entorno
+*.env
+# Archivos sensibles de entorno
+.env
+*.env
