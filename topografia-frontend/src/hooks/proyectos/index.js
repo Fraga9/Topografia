@@ -1,4 +1,6 @@
-// hooks/proyectos/index.js
+// hooks/proyectos/index.js - Actualizado con useMisProyectos
+
+// Exportar todos los hooks de useProyectos.js
 export {
   useProyectos,
   useProyecto,
@@ -8,5 +10,12 @@ export {
   useDeleteProyecto,
   useProyectoEstaciones,
   useProyectoMediciones,
-  useExportarProyecto
+  useExportarProyecto,
+  proyectoHooks
 } from './useProyectos';
+
+// Exportar el nuevo hook para la vista mis_proyectos
+export { useMisProyectos, useMisProyectosApi } from './useMisProyectos';
+
+// Export por defecto
+export { useProyectos as default } from './useProyectos';

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  useProyectos, 
-  useCreateProyecto, 
+  useMisProyectos,  // ← CAMBIO CLAVE: Usar el hook que consulta la vista mis_proyectos
+  useCreateProyectoCompleto, 
   useUpdateProyecto, 
   useDeleteProyecto 
 } from '../hooks/proyectos';
 import { useProyectoSeleccionado } from '../context/ProyectoContext';
 import { formatDate } from '../utils/formatters';
-import { Plus, Search, Calendar, MapPin, Settings, Edit, Trash2, CheckCircle } from 'lucide-react';
+import { Plus, Search, CheckCircle } from 'lucide-react';
+import ProyectoCard from '../components/ProyectoCard';
+
 
 const Proyectos = () => {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
@@ -19,16 +21,73 @@ const Proyectos = () => {
   // Context del proyecto seleccionado
   const { proyectoSeleccionado, seleccionarProyecto } = useProyectoSeleccionado();
 
-  // Hooks para gestión de proyectos
+  // 🔧 CAMBIO PRINCIPAL: Usar el hook que consulta la vista mis_proyectos
+  // Esta vista incluye todos los campos calculados que necesitamos
   const { 
-    data: proyectos, 
+    data: proyectosOriginales, // Renamed to avoid conflict
     isLoading, 
     error 
-  } = useProyectos();
+  } = useMisProyectos(); // ← Este hook debe consultar la vista mis_proyectos
   
-  const createProyecto = useCreateProyecto();
+  const createProyectoCompleto = useCreateProyectoCompleto();
   const updateProyecto = useUpdateProyecto();
   const deleteProyecto = useDeleteProyecto();
+
+  // --- Hardcoded projects for testing ---
+  const hardcodedProyectos = [
+    {
+      id: 'hc-proj-1',
+      nombre: "Demo: Carretera del Desierto",
+      tramo: "Sección Oasis",
+      cuerpo: "A",
+      km_inicial: 100000,
+      km_final: 125000,
+      estado: "EN_PROGRESO",
+      estaciones_configuradas: 250,
+      estaciones_medidas: 50,
+      total_lecturas: 200,
+      // Add any other fields expected by ProyectoCard or selection logic
+      // For example, if 'fecha_creacion' is used for sorting or display:
+      fecha_creacion: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
+    },
+    {
+      id: 'hc-proj-2',
+      nombre: "Demo: Puente Colgante",
+      tramo: "Valle Profundo",
+      cuerpo: "Unico",
+      km_inicial: 5000,
+      km_final: 5500,
+      estado: "CONFIGURACIÓN", // To test glassmorphism
+      estaciones_configuradas: 50,
+      estaciones_medidas: 0,
+      total_lecturas: 0,
+      fecha_creacion: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
+    },
+    {
+      id: 'hc-proj-3',
+      nombre: "Demo: Túnel Montañoso",
+      tramo: "Paso Cumbres",
+      cuerpo: "B",
+      km_inicial: 75000,
+      km_final: 78000,
+      estado: "PAUSADO",
+      estaciones_configuradas: 30,
+      estaciones_medidas: 10,
+      total_lecturas: 40,
+      fecha_creacion: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+    },
+  ];
+
+  // Combine fetched projects with hardcoded ones
+  // Ensure hardcoded ones don't clash with real IDs if they could be similar
+  // For demo, we can just prepend or append. Prepending might be more visible.
+  const proyectos = React.useMemo(() => {
+    const hcIds = new Set(hardcodedProyectos.map(p => p.id));
+    const filteredOriginales = proyectosOriginales?.filter(p => !hcIds.has(p.id)) || [];
+    return [...hardcodedProyectos, ...filteredOriginales];
+  }, [proyectosOriginales]);
+  // --- End of hardcoded projects section ---
+
 
   const [newProject, setNewProject] = useState({
     nombre: "",
@@ -39,7 +98,6 @@ const Proyectos = () => {
     intervalo: "5",
     espesor: "0.25",
     tolerancia_sct: "0.005",
-    fecha_inicio: new Date().toISOString().split("T")[0],
   });
 
   // Filtrar proyectos según búsqueda
@@ -49,53 +107,29 @@ const Proyectos = () => {
       proyecto.tramo?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
-  const getStatusColor = (estado) => {
-    switch (estado) {
-      case "EN_PROGRESO":
-        return "bg-green-500 text-white";
-      case "COMPLETADO":
-        return "bg-blue-500 text-white";
-      case "PAUSADO":
-        return "bg-yellow-500 text-white";
-      case "CONFIGURACION":
-        return "bg-gray-500 text-white";
-      default:
-        return "bg-gray-500 text-white";
+  // 🔍 DEBUG: Ver qué datos estamos recibiendo
+  React.useEffect(() => {
+    if (proyectos && proyectos.length > 0) {
+      console.log('📊 Datos de proyectos (combinados) para la lista:', proyectos);
+      // console.log('Campos disponibles en el primer proyecto combinado:', Object.keys(proyectos[0]));
     }
-  };
-
-  const getStatusLabel = (estado) => {
-    switch (estado) {
-      case "EN_PROGRESO":
-        return "Activo";
-      case "COMPLETADO":
-        return "Completado";
-      case "PAUSADO":
-        return "Pausado";
-      case "CONFIGURACION":
-        return "Configuración";
-      default:
-        return estado;
-    }
-  };
+  }, [proyectos]);
 
   const handleCreateProject = async () => {
     try {
       const proyectoData = {
-        nombre: newProject.nombre,
-        tramo: newProject.tramo,
-        cuerpo: newProject.cuerpo,
-        km_inicial: parseFloat(newProject.km_inicial.replace("+", "")),
-        km_final: parseFloat(newProject.km_final.replace("+", "")),
-        intervalo: parseFloat(newProject.intervalo),
-        espesor: parseFloat(newProject.espesor),
-        tolerancia_sct: parseFloat(newProject.tolerancia_sct),
-        estado: 'EN_PROGRESO'
+        p_nombre: newProject.nombre,
+        p_tramo: newProject.tramo,
+        p_cuerpo: newProject.cuerpo,
+        p_km_inicial: parseFloat(newProject.km_inicial),
+        p_km_final: parseFloat(newProject.km_final),
+        p_intervalo: parseFloat(newProject.intervalo),
+        p_espesor: parseFloat(newProject.espesor),
+        p_tolerancia_sct: parseFloat(newProject.tolerancia_sct)
       };
 
-      const nuevoProyecto = await createProyecto.mutateAsync(proyectoData);
+      const nuevoProyecto = await createProyectoCompleto.mutateAsync(proyectoData);
       
-      // Seleccionar automáticamente el nuevo proyecto
       seleccionarProyecto(nuevoProyecto);
       
       setMostrarFormulario(false);
@@ -108,21 +142,18 @@ const Proyectos = () => {
         intervalo: "5",
         espesor: "0.25",
         tolerancia_sct: "0.005",
-        fecha_inicio: new Date().toISOString().split("T")[0],
       });
 
-      // Navegar al dashboard después de crear el proyecto
       navigate('/dashboard');
     } catch (error) {
       console.error('Error creando proyecto:', error);
-      alert('Error al crear el proyecto');
+      alert('Error al crear el proyecto: ' + (error.message || 'Error desconocido'));
     }
   };
 
   const handleSeleccionarProyecto = (proyecto) => {
     seleccionarProyecto(proyecto);
-    // Navegar al dashboard después de seleccionar
-    navigate('/dashboard');
+    // navigate('/dashboard'); // Line removed to prevent redirection
   };
 
   const handleEliminar = async (proyectoId) => {
@@ -130,7 +161,6 @@ const Proyectos = () => {
       try {
         await deleteProyecto.mutateAsync(proyectoId);
         
-        // Si el proyecto eliminado era el seleccionado, limpiar la selección
         if (proyectoSeleccionado && proyectoSeleccionado.id === proyectoId) {
           seleccionarProyecto(null);
         }
@@ -195,42 +225,34 @@ const Proyectos = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">KM Inicial *</label>
               <input
-                type="text"
+                type="number"
                 value={newProject.km_inicial}
                 onChange={(e) => setNewProject({ ...newProject, km_inicial: e.target.value })}
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ej: 78000"
+                placeholder="78000"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">KM Final *</label>
               <input
-                type="text"
+                type="number"
                 value={newProject.km_final}
                 onChange={(e) => setNewProject({ ...newProject, km_final: e.target.value })}
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ej: 79000"
+                placeholder="79000"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Inicio</label>
-              <input
-                type="date"
-                value={newProject.fecha_inicio}
-                onChange={(e) => setNewProject({ ...newProject, fecha_inicio: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Intervalo (metros)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Intervalo entre estaciones (metros)</label>
               <input
                 type="number"
                 value={newProject.intervalo}
                 onChange={(e) => setNewProject({ ...newProject, intervalo: e.target.value })}
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                step="0.1"
+                min="1"
               />
             </div>
 
@@ -242,6 +264,7 @@ const Proyectos = () => {
                 value={newProject.espesor}
                 onChange={(e) => setNewProject({ ...newProject, espesor: e.target.value })}
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="0.01"
               />
             </div>
 
@@ -253,6 +276,7 @@ const Proyectos = () => {
                 value={newProject.tolerancia_sct}
                 onChange={(e) => setNewProject({ ...newProject, tolerancia_sct: e.target.value })}
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="0.001"
               />
             </div>
           </div>
@@ -260,10 +284,10 @@ const Proyectos = () => {
           <div className="flex space-x-4 mt-6">
             <button
               onClick={handleCreateProject}
-              disabled={!newProject.nombre || !newProject.km_inicial || !newProject.km_final || createProyecto.isLoading}
+              disabled={!newProject.nombre || !newProject.km_inicial || !newProject.km_final || createProyectoCompleto.isLoading}
               className="bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              {createProyecto.isLoading ? 'Creando...' : 'Crear Proyecto'}
+              {createProyectoCompleto.isLoading ? 'Creando proyecto y estaciones...' : 'Crear Proyecto'}
             </button>
             <button
               onClick={() => setMostrarFormulario(false)}
@@ -347,96 +371,29 @@ const Proyectos = () => {
 
       {/* Projects Grid */}
       {proyectosFiltrados.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
           {proyectosFiltrados.map((proyecto) => {
-            const progreso = Math.floor(Math.random() * 100); // Temporal hasta tener datos reales
-            const estacionesTotal = Math.ceil((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo);
-            const completadas = Math.floor((progreso / 100) * estacionesTotal);
             const esSeleccionado = proyectoSeleccionado && proyectoSeleccionado.id === proyecto.id;
 
             return (
-              <div
+              <ProyectoCard
                 key={proyecto.id}
-                className={`bg-white border rounded-lg p-6 hover:shadow-md transition-shadow ${
-                  esSeleccionado ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">{proyecto.nombre}</h3>
-                      {esSeleccionado && (
-                        <CheckCircle className="w-5 h-5 text-blue-600" />
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      {proyecto.tramo}, Cuerpo {proyecto.cuerpo}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(proyecto.estado)}`}>
-                      {getStatusLabel(proyecto.estado)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    <span>
-                      KM {proyecto.km_inicial/1000}+{String(proyecto.km_inicial%1000).padStart(3,'0')} - {proyecto.km_final/1000}+{String(proyecto.km_final%1000).padStart(3,'0')}
-                    </span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span>{formatDate(proyecto.fecha_creacion)}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Settings className="w-4 h-4 mr-2" />
-                    <span>Intervalo: {proyecto.intervalo}m</span>
-                  </div>
-                </div>
-
-                {/* Progress */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">Progreso</span>
-                    <span className="font-medium">{progreso}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${progreso}%` }}></div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {completadas}/{estacionesTotal} estaciones
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleSeleccionarProyecto(proyecto)}
-                    className={`flex-1 py-2 px-4 rounded font-medium transition-colors ${
-                      esSeleccionado 
-                        ? 'bg-green-600 text-white hover:bg-green-700' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {esSeleccionado ? 'Proyecto Activo' : 'Seleccionar Proyecto'}
-                  </button>
-                  
-                  <button
-                    onClick={() => handleEliminar(proyecto.id)}
-                    className="text-gray-400 hover:text-red-600 transition-colors p-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                proyecto={proyecto}
+                esSeleccionado={esSeleccionado}
+                onSeleccionar={handleSeleccionarProyecto}
+                onEliminar={handleEliminar}
+              />
             );
           })}
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-gray-500 mb-4">No se encontraron proyectos que coincidan con tu búsqueda</p>
+          <p className="text-gray-500 mb-4">
+            {searchTerm 
+              ? 'No se encontraron proyectos que coincidan con tu búsqueda'
+              : 'No tienes proyectos creados aún'
+            }
+          </p>
           <button
             onClick={() => setMostrarFormulario(true)}
             className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
