@@ -1,261 +1,322 @@
 import { useState } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth, useLogout } from '../hooks/auth';
+import { useProyectoSeleccionado } from '../context/ProyectoContext';
 import { 
   Menu, 
   X, 
   Home, 
   FolderPlus, 
-  Calculator, 
-  BarChart3, 
-  Settings, 
   LogOut,
-  Building2,
   User,
-  ChevronRight,
   AlertCircle,
   FileBarChart2,
   Map,
   SlidersHorizontal,
-  ClipboardList,
   FileText
 } from 'lucide-react';
 
-const Layout = ({ children, user, onLogout, currentPage = 'dashboard', setCurrentPage }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const Layout = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user } = useAuth();
+  const logout = useLogout();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Usar el context del proyecto
+  const { proyectoSeleccionado, limpiarProyecto } = useProyectoSeleccionado();
 
-  const navigation = [
-    { id: 'proyectos', name: 'Proyectos', icon: FolderPlus, href: '/proyectos' },
-    { id: 'dashboard', name: 'Dashboard', icon: Home, href: '/' },
-    { id: 'configuracion', name: 'Configuración', icon: SlidersHorizontal, href: '/configuracion' },
-    { id: 'datosdiseno', name: 'Datos de Diseño', icon: ClipboardList, href: '/datosdiseno' },
-    { id: 'campo', name: 'Campo', icon: Map, href: '/campo' },
-    { id: 'alertas', name: 'Alertas', icon: AlertCircle, href: '/alertas' },
-    { id: 'analisis', name: 'Análisis', icon: FileBarChart2, href: '/analisis' },
-    { id: 'reportes', name: 'Reportes', icon: FileText, href: '/reportes' },
+  const menuItems = [
+    { id: "proyectos", name: "Proyectos", icon: FolderPlus, href: '/proyectos' },
+    { id: "dashboard", name: "Dashboard", icon: Home, href: '/', requiresProject: true },
+    { id: "campo", name: "Campo", icon: Map, href: '/campo', requiresProject: true },
+    { id: "configuracion", name: "Configuración", icon: SlidersHorizontal, href: '/configuracion', requiresProject: true },
+    { id: "alertas", name: "Alertas", icon: AlertCircle, href: '/alertas', requiresProject: true },
+    { id: "analisis", name: "Análisis", icon: FileBarChart2, href: '/analisis', requiresProject: true },
+    { id: "reportes", name: "Reportes", icon: FileText, href: '/reportes', requiresProject: true },
   ];
 
-  const NavLink = ({ item, mobile = false }) => (
-    <button
-      type="button"
-      className={`nav-link ${currentPage === item.id ? 'active' : ''} ${
-        mobile ? 'px-4 py-3' : 'px-3 py-2'
-      }`}
-      onClick={() => {
-        setCurrentPage(item.id);
-        if (mobile) setSidebarOpen(false);
-      }}
-    >
-      <item.icon className="w-5 h-5 mr-3" />
-      {item.name}
-      {currentPage === item.id && (
-        <ChevronRight className="w-4 h-4 ml-auto" />
-      )}
-    </button>
-  );
+  const handleLogout = () => {
+    logout.mutate();
+  };
+
+  const handleCambiarProyecto = () => {
+    // Navegar a la página de proyectos
+    navigate('/proyectos');
+  };
+
+  const isCurrentPage = (href) => {
+    if (href === '/') return location.pathname === '/';
+    return location.pathname.startsWith(href);
+  };
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex relative">
-      {/* Sidebar Desktop */}
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex flex-col w-64">
-          <div className="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto">
-            {/* Logo */}
-            <div className="flex items-center flex-shrink-0 px-4 mb-8">
+    <div className="h-screen bg-gray-50 flex relative overflow-hidden">
+      {/* Mobile/Tablet Overlay */}
+      {!sidebarCollapsed && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={toggleSidebar} />
+      )}
+
+      {/* Sidebar - Optimizado para tablets */}
+      <div
+        className={`${
+          sidebarCollapsed ? "w-0 md:w-16" : "w-64 md:w-72"
+        } bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out z-50 h-screen overflow-hidden ${
+          sidebarCollapsed ? "fixed md:relative -translate-x-full md:translate-x-0" : "fixed md:relative translate-x-0"
+        }`}
+      >
+        {/* Toggle Button - Siempre visible en tablets */}
+        <button
+          onClick={toggleSidebar}
+          className="absolute -right-10 top-4 md:hidden bg-white border border-gray-200 rounded-full p-2 shadow-lg z-50"
+          aria-label={sidebarCollapsed ? "Abrir menú" : "Cerrar menú"}
+        >
+          {sidebarCollapsed ? <Menu className="w-5 h-5 text-gray-700" /> : <X className="w-5 h-5 text-gray-700" />}
+        </button>
+
+        {/* Header - Logo CEMEX cuando expandido, solo toggle cuando colapsado */}
+        <div className="p-3 md:p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+          {!sidebarCollapsed && (
+            <div className="flex items-center space-x-3 min-w-0 flex-1">
+              {/* Logo CEMEX Real */}
               <div className="flex flex-col items-start w-full">
-                <img src="/CemexLogo.webp" alt="CEMEX Logo" className="w-28 h-8 rounded-lg bg-white object-contain" />
+                <img 
+                  src="/CemexLogo.webp" 
+                  alt="CEMEX Logo" 
+                  className="w-24 md:w-28 h-6 md:h-8 rounded-lg bg-white object-contain" 
+                />
                 <p className="text-xs text-gray-500 mt-1">Sistema de topografía avanzado</p>
               </div>
             </div>
+          )}
 
-            {/* Navigation */}
-            <nav className="flex-1 px-2 space-y-1">
-              {navigation.map((item) => (
-                <NavLink key={item.id} item={item} />
-              ))}
-            </nav>
-
-            {/* User section */}
-            <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-              <div className="flex items-center">
-                <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full mr-3">
-                  <User className="w-5 h-5 text-blue-700" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user?.nombre || 'Usuario'}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    ID: {user?.cemexId || 'TOP001'}
-                  </p>
-                </div>
-                <button
-                  onClick={onLogout}
-                  className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                  title="Cerrar sesión"
-                >
-                  <LogOut className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
+          {/* Cuando está colapsado, solo mostrar el botón toggle */}
+          {sidebarCollapsed && (
+            <div className="w-full flex justify-center">
+              {/* Espacio vacío - no mostramos logo cuando está colapsado */}
             </div>
-          </div>
-        </div>
-      </div>
+          )}
 
-      {/* Mobile sidebar overlay and sidebar */}
-      {sidebarOpen && (
-        <>
-          {/* Overlay */}
-          <div 
-            className="md:hidden fixed inset-0 bg-white/10 backdrop-blur-sm transition-opacity duration-300 ease-in-out z-40"
-            onClick={() => setSidebarOpen(false)}
-          />
-          
-          {/* Sidebar */}
-          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out translate-x-0">
-            {/* Close button */}
-            <div className="absolute top-0 right-0 -mr-12 pt-4">
+          {/* Toggle Button for Desktop */}
+          <button
+            onClick={toggleSidebar}
+            className="hidden md:block p-1 rounded hover:bg-gray-100 flex-shrink-0"
+            aria-label={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
+          >
+            {sidebarCollapsed ? <Menu className="w-5 h-5" /> : <X className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Project Info - Optimizado para tablets */}
+        {proyectoSeleccionado && !sidebarCollapsed && (
+          <div className="p-3 md:p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-start justify-between min-w-0">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-gray-900 text-sm truncate">Proyecto Activo</h3>
+                <p className="text-xs text-gray-600 mt-1 truncate">{proyectoSeleccionado.nombre}</p>
+                <p className="text-xs text-gray-600 truncate">
+                  KM {Math.floor(proyectoSeleccionado.km_inicial/1000)}+{String(proyectoSeleccionado.km_inicial%1000).padStart(3,'0')} - {Math.floor(proyectoSeleccionado.km_final/1000)}+{String(proyectoSeleccionado.km_final%1000).padStart(3,'0')}
+                </p>
+                <p className="text-xs text-gray-600 truncate">
+                  {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
+                </p>
+              </div>
               <button
-                className="ml-1 flex items-center justify-center h-10 w-10 rounded-full bg-white shadow-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                onClick={() => setSidebarOpen(false)}
+                onClick={handleCambiarProyecto}
+                className="text-xs text-[#0404b8] hover:text-blue-800 underline flex-shrink-0 ml-2"
               >
-                <X className="h-6 w-6 text-gray-600" />
+                Cambiar
               </button>
             </div>
-            
-            <div className="flex flex-col h-full pt-5 pb-4 overflow-y-auto">
-              {/* Mobile Logo */}
-              <div className="flex items-center flex-shrink-0 px-4 mb-8 w-full">
-                <div className="flex flex-col items-start w-full">
-                  <img src="/CemexLogo.webp" alt="CEMEX Logo" className="w-28 h-8 rounded-lg bg-white object-contain" />
-                  <p className="text-xs text-gray-500 mt-1">Sistema de topografía avanzado</p>
-                </div>
-              </div>
-              
-              {/* Mobile Navigation */}
-              <nav className="flex-1 px-2 space-y-1">
-                {navigation.map((item) => (
-                  <NavLink key={item.id} item={item} mobile />
-                ))}
-              </nav>
-              
-              {/* Mobile User section */}
-              <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-                <div className="flex items-center w-full">
-                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full mr-3">
-                    <User className="w-5 h-5 text-blue-700" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {user?.nombre || 'Usuario'}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {user?.empresa || 'CEMEX'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={onLogout}
-                    className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                    title="Cerrar sesión"
-                  >
-                    <LogOut className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-              </div>
+          </div>
+        )}
+
+        {proyectoSeleccionado && sidebarCollapsed && (
+          <div className="p-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <div className="w-8 h-8 bg-[#0404b8] rounded flex items-center justify-center mx-auto">
+              <span className="text-xs font-bold text-white">P</span>
             </div>
           </div>
-        </>
-      )}
+        )}
+
+        {!proyectoSeleccionado && !sidebarCollapsed && (
+          <div className="p-3 md:p-4 bg-yellow-50 border-b border-gray-200 flex-shrink-0">
+            <p className="text-sm text-yellow-800">Selecciona un proyecto para continuar</p>
+          </div>
+        )}
+
+        {!proyectoSeleccionado && sidebarCollapsed && (
+          <div className="p-2 bg-yellow-50 border-b border-gray-200 flex-shrink-0">
+            <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center mx-auto">
+              <span className="text-xs font-bold text-white">!</span>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation - Optimizado para tablets */}
+        <nav className="flex-1 p-2 overflow-hidden">
+          <ul className="space-y-1 h-full flex flex-col">
+            {menuItems.map((item, index) => {
+              const Icon = item.icon;
+              const isActive = isCurrentPage(item.href);
+              const isDisabled = item.requiresProject && !proyectoSeleccionado;
+
+              return (
+                <li key={item.id} className="flex-shrink-0">
+                  {isDisabled ? (
+                    <div
+                      className={`w-full flex items-center ${
+                        sidebarCollapsed ? "justify-center px-2" : "space-x-3 px-3"
+                      } py-2.5 rounded-lg text-gray-400 cursor-not-allowed relative`}
+                      title={sidebarCollapsed ? `${item.name} (Requiere proyecto)` : undefined}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <span className="font-medium text-sm truncate">{item.name}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <Link
+                      to={item.href}
+                      className={`w-full flex items-center ${
+                        sidebarCollapsed ? "justify-center px-2" : "space-x-3 px-3"
+                      } py-2.5 rounded-lg text-left transition-colors relative ${
+                        isActive
+                          ? "bg-[#0404b8] text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      title={sidebarCollapsed ? item.name : undefined}
+                      onClick={() => {
+                        if (window.innerWidth < 768) {
+                          setSidebarCollapsed(true);
+                        }
+                      }}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="font-medium text-sm truncate">{item.name}</span>
+                          {item.id === "alertas" && proyectoSeleccionado && (
+                            <span className="ml-auto bg-[#f62631] text-white text-xs px-2 py-1 rounded-full flex-shrink-0">
+                              14
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {sidebarCollapsed && item.id === "alertas" && proyectoSeleccionado && (
+                        <span className="absolute -top-1 -right-1 bg-[#f62631] text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                          14
+                        </span>
+                      )}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* User Info - Optimizado para tablets */}
+        {!sidebarCollapsed && (
+          <div className="p-3 md:p-4 border-t border-gray-200 flex-shrink-0">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <User className="w-5 h-5 text-blue-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user?.email?.split('@')[0] || 'Usuario'}
+                </p>
+                <p className="text-xs text-gray-600 truncate">Conectado</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-red-600 transition-colors duration-200 flex-shrink-0"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sidebarCollapsed && (
+          <div className="p-2 border-t border-gray-200 flex-shrink-0">
+            <div className="flex flex-col items-center space-y-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-blue-700" />
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-hidden">
-        {/* Top bar */}
-        <div className="bg-white shadow-sm border-b border-gray-200 relative z-30">
-          <div className="px-4 sm:px-6 md:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex items-center">
+      <div className="flex flex-col flex-1 overflow-hidden h-screen">
+        {/* Top bar for mobile */}
+        <div className="md:hidden bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-2">
+            <button
+              type="button"
+              className="text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 p-2"
+              onClick={toggleSidebar}
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            
+            {/* Logo CEMEX en mobile */}
+            <div className="flex items-center">
+              <img 
+                src="/CemexLogo.webp" 
+                alt="CEMEX Logo" 
+                className="w-20 h-6 object-contain" 
+              />
+            </div>
+            
+            <div className="w-10 h-10"></div>
+          </div>
+          
+          {/* Mobile Project Info */}
+          {proyectoSeleccionado && (
+            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-blue-900 truncate">{proyectoSeleccionado.nombre}</p>
+                  <p className="text-xs text-blue-600 truncate">
+                    {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
+                  </p>
+                </div>
                 <button
-                  className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors"
-                  onClick={() => setSidebarOpen(true)}
+                  onClick={handleCambiarProyecto}
+                  className="text-xs text-blue-600 hover:text-blue-800 underline flex-shrink-0 ml-2 p-1"
                 >
-                  <Menu className="h-6 w-6" />
+                  Cambiar
                 </button>
-                <div className="ml-4 md:ml-0">
-                  <h1 className="text-xl font-semibold text-gray-900 capitalize">
-                    {navigation.find(item => item.id === currentPage)?.name || 'Dashboard'}
-                  </h1>
-                </div>
-              </div>
-              
-              {/* Desktop user menu */}
-              <div className="hidden md:flex md:items-center md:space-x-4">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    {user?.nombre || 'Usuario'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {user?.cemexId || 'TOP001'} • {user?.rol || 'Topógrafo'}
-                  </p>
-                </div>
-                <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                  <User className="w-4 h-4 text-blue-700" />
-                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Page content */}
-        <main className="flex-1 relative overflow-y-auto focus:outline-none">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              {children || (
-                <div className="space-y-6">
-                  {/* Demo content */}
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Contenido del Dashboard</h2>
-                    <p className="text-gray-600">
-                      Este es el contenido principal de la aplicación. Ahora el menú hamburguesa 
-                      funciona de manera más profesional con un overlay suave y animaciones mejoradas.
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="bg-white rounded-lg shadow p-6">
-                      <h3 className="font-medium text-gray-900 mb-2">Tarjeta 1</h3>
-                      <p className="text-gray-600">Contenido de ejemplo</p>
-                    </div>
-                    <div className="bg-white rounded-lg shadow p-6">
-                      <h3 className="font-medium text-gray-900 mb-2">Tarjeta 2</h3>
-                      <p className="text-gray-600">Contenido de ejemplo</p>
-                    </div>
-                    <div className="bg-white rounded-lg shadow p-6">
-                      <h3 className="font-medium text-gray-900 mb-2">Tarjeta 3</h3>
-                      <p className="text-gray-600">Contenido de ejemplo</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+        {/* Main content area */}
+        <main className="flex-1 relative overflow-y-auto focus:outline-none bg-gray-50">
+          <div className="py-4 md:py-6 h-full">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 h-full">
+              <Outlet />
             </div>
           </div>
         </main>
       </div>
-
-      <style jsx>{`
-        .nav-link {
-          @apply flex items-center text-gray-600 hover:bg-gray-50 hover:text-gray-900 group rounded-md transition-all duration-200;
-        }
-        
-        .nav-link.active {
-          @apply bg-blue-50 border-r-2 border-blue-500 text-blue-700 font-medium;
-        }
-        
-        .nav-link:hover {
-          @apply bg-gray-50 text-gray-900;
-        }
-        
-        .nav-link.active:hover {
-          @apply bg-blue-50 text-blue-700;
-        }
-      `}</style>
     </div>
   );
 };
