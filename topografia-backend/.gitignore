@@ -3,3 +3,6 @@
 # Archivos sensibles de entorno
 .env
 *.env
+
+venv
+__pycache__

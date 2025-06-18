@@ -93,18 +93,50 @@ export const endpoints = {
     getLecturas: (id) => `/mediciones/${id}/lecturas/`,
   },
 
-  // Departamento de Lecturas (sin cambios)
+  // ✅ NUEVO: Departamento de Lecturas (coincide con el backend)
   lecturas: {
+    // Obtener todas las lecturas (con filtro opcional por medicion_id)
     getAll: () => '/lecturas/',
+    
+    // Obtener lecturas filtradas por medición
+    getByMedicion: (medicionId) => `/lecturas/?medicion_id=${medicionId}`,
+    
+    // Obtener una lectura específica
     getById: (id) => `/lecturas/${id}`,
+    
+    // Crear una nueva lectura
     create: () => '/lecturas/',
+    
+    // Actualizar completamente una lectura
     update: (id) => `/lecturas/${id}`,
+    
+    // Actualizar campos específicos de una lectura
     patch: (id) => `/lecturas/${id}`,
+    
+    // Eliminar una lectura
     delete: (id) => `/lecturas/${id}`,
+    
+    // Endpoints adicionales para funcionalidades avanzadas (placeholders)
     getWithFilters: (filters) => {
       const params = new URLSearchParams(filters);
       return `/lecturas/?${params.toString()}`;
     },
+    
+    // Endpoints para operaciones batch
+    createBatch: () => '/lecturas/batch/',
+    
+    // Endpoints para validación y cálculos
+    validate: (medicionId) => `/lecturas/validate/${medicionId}`,
+    calculateElevations: (medicionId) => `/lecturas/calculate-elevations/${medicionId}`,
+    
+    // Endpoints para estadísticas y análisis
+    getStats: (medicionId) => `/lecturas/stats/${medicionId}`,
+    getProfile: (medicionId) => `/lecturas/profile/${medicionId}`,
+    getByQuality: (medicionId, calidad) => `/lecturas/quality/${medicionId}?calidad=${calidad}`,
+    
+    // Endpoints para importación/exportación
+    import: (medicionId) => `/lecturas/import/${medicionId}`,
+    export: (medicionId) => `/lecturas/export/${medicionId}`,
   },
 
   // Endpoints de utilidad
@@ -148,5 +180,6 @@ export const debugEndpoints = (proyectoId) => {
   console.log('URL Debug:', endpoints.proyectos.getDebug(proyectoId));
   console.log('URL Estaciones alternativa:', endpoints.estaciones.getByProject(proyectoId));
   console.log('URL Mediciones alternativa:', endpoints.mediciones.getByProject(proyectoId));
+  console.log('URL Lecturas por medición:', endpoints.lecturas.getByMedicion(123));
   console.groupEnd();
 };

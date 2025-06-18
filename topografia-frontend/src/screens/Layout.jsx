@@ -29,6 +29,7 @@ const Layout = () => {
   const menuItems = [
     { id: "proyectos", name: "Proyectos", icon: FolderPlus, href: '/proyectos' },
     { id: "dashboard", name: "Dashboard", icon: Home, href: '/', requiresProject: true },
+    { id: "diseño", name: "Datos Diseño", icon: FileText, href: '/datos-diseno', requiresProject: true },
     { id: "campo", name: "Campo", icon: Map, href: '/campo', requiresProject: true },
     { id: "configuracion", name: "Configuración", icon: SlidersHorizontal, href: '/configuracion', requiresProject: true },
     { id: "alertas", name: "Alertas", icon: AlertCircle, href: '/alertas', requiresProject: true },

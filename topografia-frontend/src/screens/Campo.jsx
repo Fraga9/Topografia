@@ -1,519 +1,786 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useProyecto } from '../hooks/useProyecto';
 import { 
   useEstaciones, 
-  useCreateEstacion, 
   useMediciones, 
   useCreateMedicion,
-  useLecturas,
-  useCreateLectura 
 } from '../hooks';
-import { formatDate, formatNumber } from '../utils/formatters';
+import { useLecturas, useCreateLectura } from '../hooks/lecturas';
 
 const Campo = () => {
-  const [vistaActiva, setVistaActiva] = useState('estaciones');
-  const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const { proyecto, tieneProyecto, formatearKM, informacionProyecto } = useProyecto();
+  
+  // Estados principales
+  const [estacionActual, setEstacionActual] = useState(0);
+  const [medicionActiva, setMedicionActiva] = useState(null);
+  const [vistaActiva, setVistaActiva] = useState('captura'); // 'captura' o 'graficas'
+  
+  // Datos del banco de nivel para nueva medición
+  const [datoBN, setDatoBN] = useState({
+    altura: '',
+    lectura: ''
+  });
 
-  // Hooks para gestión de datos de campo
+  // ✅ CORREGIDO: Hooks para datos con mejor manejo de errores
   const { 
-    data: estaciones, 
-    isLoading: loadingEstaciones 
-  } = useEstaciones({ proyecto_id: proyectoSeleccionado });
-  
+    data: estaciones = [], 
+    isLoading: loadingEstaciones,
+    error: errorEstaciones 
+  } = useEstaciones(proyecto?.id, { enabled: !!proyecto?.id });
+
   const { 
-    data: mediciones, 
-    isLoading: loadingMediciones 
-  } = useMediciones({ proyecto_id: proyectoSeleccionado });
-  
-  const createEstacion = useCreateEstacion();
+    data: mediciones = [], 
+    isLoading: loadingMediciones,
+    error: errorMediciones 
+  } = useMediciones({ proyecto_id: proyecto?.id, enabled: !!proyecto?.id });
+
+  // ✅ CORREGIDO: Divisiones transversales estándar del proyecto
+  const divisiones = React.useMemo(() => {
+    if (!informacionProyecto) return [];
+    
+    const izquierdas = [...(informacionProyecto.divisionesIzquierdas || [])].reverse();
+    const derechas = informacionProyecto.divisionesDerechas || [];
+    
+    return [...izquierdas, 0, ...derechas];
+  }, [informacionProyecto]);
+
+  // ✅ CORREGIDO: Hook de lecturas con mejor manejo
+  const { 
+    data: lecturas = [], 
+    isLoading: loadingLecturas,
+    error: errorLecturas,
+    refetch: refetchLecturas
+  } = useLecturas(medicionActiva?.id);
+
+  // Mutations
   const createMedicion = useCreateMedicion();
+  const createLectura = useCreateLectura();
 
-  const [formDataEstacion, setFormDataEstacion] = useState({
-    nombre: '',
-    coordenada_x: '',
-    coordenada_y: '',
-    elevacion: '',
-    descripcion: ''
-  });
+  // Estación actual seleccionada
+  const estacionSeleccionada = estaciones[estacionActual];
 
-  const [formDataMedicion, setFormDataMedicion] = useState({
-    estacion_id: '',
-    fecha_medicion: new Date().toISOString().split('T')[0],
-    temperatura: '',
-    humedad: '',
-    observaciones: ''
-  });
-
-  const handleSubmitEstacion = async (e) => {
-    e.preventDefault();
-    
-    try {
-      await createEstacion.mutateAsync({
-        ...formDataEstacion,
-        proyecto_id: proyectoSeleccionado,
-        coordenada_x: parseFloat(formDataEstacion.coordenada_x),
-        coordenada_y: parseFloat(formDataEstacion.coordenada_y),
-        elevacion: parseFloat(formDataEstacion.elevacion)
+  // ✅ CORREGIDO: Medición activa para la estación actual
+  useEffect(() => {
+    if (estacionSeleccionada && mediciones.length > 0) {
+      // Buscar medición que coincida con el KM de la estación
+      const medicion = mediciones.find(m => {
+        // Convertir ambos a número para comparación precisa
+        const kmEstacion = parseFloat(estacionSeleccionada.km);
+        const kmMedicion = parseFloat(m.estacion_km);
+        return Math.abs(kmEstacion - kmMedicion) < 0.001; // Tolerancia para decimales
       });
       
-      setFormDataEstacion({
-        nombre: '',
-        coordenada_x: '',
-        coordenada_y: '',
-        elevacion: '',
-        descripcion: ''
+      console.log('🔍 Buscando medición para estación:', {
+        estacionKm: estacionSeleccionada.km,
+        medicionesDisponibles: mediciones.map(m => ({ id: m.id, km: m.estacion_km })),
+        medicionEncontrada: medicion
       });
-      setMostrarFormulario(false);
+      
+      setMedicionActiva(medicion || null);
+    }
+  }, [estacionSeleccionada, mediciones]);
+
+  // ✅ MEJORADO: Debug de datos recibidos
+  React.useEffect(() => {
+    console.group('📊 Debug Campo - Datos del Backend');
+    console.log('🏗️ Proyecto:', { id: proyecto?.id, nombre: proyecto?.nombre });
+    console.log('📍 Estaciones:', { 
+      cantidad: estaciones.length, 
+      loading: loadingEstaciones,
+      error: errorEstaciones?.message,
+      muestra: estaciones[0] 
+    });
+    console.log('📏 Mediciones:', { 
+      cantidad: mediciones.length,
+      loading: loadingMediciones, 
+      error: errorMediciones?.message,
+      muestra: mediciones[0]
+    });
+    console.log('🎯 Medición Activa:', medicionActiva);
+    console.log('📖 Lecturas:', {
+      cantidad: lecturas.length,
+      loading: loadingLecturas,
+      error: errorLecturas?.message,
+      estructura: lecturas[0] ? Object.keys(lecturas[0]) : [],
+      muestra: lecturas[0]
+    });
+    console.log('🎛️ Configuración:', {
+      informacionProyecto,
+      divisiones: divisiones.length ? divisiones : 'No configuradas'
+    });
+    
+    // Debug específico de lecturas si hay datos
+    if (lecturas.length > 0) {
+      console.log('🔍 Análisis de lecturas:');
+      lecturas.forEach(lectura => {
+        console.log(`  📐 División: ${lectura.division_transversal}m, Lectura: ${lectura.lectura_mira}m, Clasificación: ${lectura.clasificacion || 'Sin clasificar'}`);
+      });
+    }
+    
+    console.groupEnd();
+  }, [
+    proyecto?.id, estaciones, mediciones, medicionActiva, lecturas, 
+    loadingEstaciones, loadingMediciones, loadingLecturas,
+    errorEstaciones, errorMediciones, errorLecturas,
+    divisiones, informacionProyecto
+  ]);
+
+  // ✅ CORREGIDO: Crear nueva medición
+  const handleCrearMedicion = async () => {
+    if (!estacionSeleccionada || !datoBN.altura || !datoBN.lectura) {
+      alert('Complete los datos del Banco de Nivel');
+      return;
+    }
+
+    try {
+      const nuevaMedicion = {
+        proyecto_id: proyecto.id,
+        estacion_km: parseFloat(estacionSeleccionada.km), // Asegurar que sea número
+        bn_altura: parseFloat(datoBN.altura),
+        bn_lectura: parseFloat(datoBN.lectura),
+        operador: 'Operador Campo',
+        fecha_medicion: new Date().toISOString().split('T')[0]
+      };
+
+      console.log('🔄 Creando medición:', nuevaMedicion);
+      const resultado = await createMedicion.mutateAsync(nuevaMedicion);
+      console.log('✅ Medición creada:', resultado);
+      
+      setMedicionActiva(resultado);
+      
+      // Limpiar formulario
+      setDatoBN({ altura: '', lectura: '' });
+      
     } catch (error) {
-      console.error('Error al crear estación:', error);
+      console.error('❌ Error creando medición:', error);
+      alert('Error al crear medición: ' + (error.response?.data?.detail || error.message));
     }
   };
 
-  const handleSubmitMedicion = async (e) => {
-    e.preventDefault();
-    
+  // ✅ CORREGIDO: Guardar lectura
+  const handleGuardarLectura = async (division, valor) => {
+    if (!medicionActiva || !valor) return;
+
     try {
-      await createMedicion.mutateAsync({
-        ...formDataMedicion,
-        proyecto_id: proyectoSeleccionado,
-        temperatura: parseFloat(formDataMedicion.temperatura),
-        humedad: parseFloat(formDataMedicion.humedad)
+      console.log('🔄 Guardando lectura:', { 
+        medicion_id: medicionActiva.id, 
+        division_transversal: division, 
+        lectura_mira: valor 
       });
+
+      const nuevaLectura = {
+        medicion_id: medicionActiva.id,
+        division_transversal: parseFloat(division),
+        lectura_mira: parseFloat(valor)
+      };
+
+      const resultado = await createLectura.mutateAsync(nuevaLectura);
+      console.log('✅ Lectura guardada:', resultado);
       
-      setFormDataMedicion({
-        estacion_id: '',
-        fecha_medicion: new Date().toISOString().split('T')[0],
-        temperatura: '',
-        humedad: '',
-        observaciones: ''
-      });
-      setMostrarFormulario(false);
+      // Refrescar lecturas para mostrar la nueva
+      setTimeout(() => {
+        refetchLecturas();
+      }, 500);
+      
     } catch (error) {
-      console.error('Error al crear medición:', error);
+      console.error('❌ Error guardando lectura:', error);
+      alert('Error al guardar lectura: ' + (error.response?.data?.detail || error.message));
     }
   };
 
-  const renderEstaciones = () => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">Estaciones de Campo</h3>
-        <button
-          onClick={() => {
-            setMostrarFormulario(true);
-            setVistaActiva('nueva-estacion');
-          }}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
-        >
-          Nueva Estación
-        </button>
-      </div>
+  // Navegar entre estaciones
+  const irAEstacion = (direccion) => {
+    if (direccion === 'anterior' && estacionActual > 0) {
+      setEstacionActual(estacionActual - 1);
+    } else if (direccion === 'siguiente' && estacionActual < estaciones.length - 1) {
+      setEstacionActual(estacionActual + 1);
+    }
+  };
 
-      {loadingEstaciones ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse bg-gray-200 h-20 rounded"></div>
-          ))}
+  // Formatear números
+  const formatNumber = (num, decimales = 3) => {
+    if (num === null || num === undefined || num === '') return '';
+    return parseFloat(num).toFixed(decimales);
+  };
+
+  // ✅ CORREGIDO: Obtener lectura para una división específica
+  const getLectura = (division) => {
+    if (!lecturas || lecturas.length === 0) return '';
+    
+    // Buscar la lectura exacta con tolerancia para decimales
+    const lectura = lecturas.find(l => 
+      Math.abs(parseFloat(l.division_transversal) - parseFloat(division)) < 0.01
+    );
+    
+    const resultado = lectura?.lectura_mira || '';
+    
+    // Debug para diagnosticar (solo para división 1.3)
+    if (division === 1.3 && import.meta.env.DEV) {
+      console.log(`🔍 getLectura Debug para división ${division}:`, {
+        division,
+        lecturas: lecturas.map(l => ({ 
+          id: l.id, 
+          division: l.division_transversal, 
+          lectura: l.lectura_mira 
+        })),
+        lecturaEncontrada: lectura,
+        resultado
+      });
+    }
+    
+    return resultado;
+  };
+
+  // ✅ CORREGIDO: Calcular datos para gráficas usando campos del backend
+  const datosGrafica = React.useMemo(() => {
+    if (!lecturas.length) return [];
+    
+    return lecturas.map(lectura => ({
+      division: parseFloat(lectura.division_transversal),
+      elevacionReal: lectura.elv_base_real ? parseFloat(lectura.elv_base_real) : null,
+      elevacionTeorica: lectura.elv_base_proyecto ? parseFloat(lectura.elv_base_proyecto) : null,
+      elevacionConcreto: lectura.elv_concreto_proyecto ? parseFloat(lectura.elv_concreto_proyecto) : null,
+      diferencia: lectura.elv_base_real && lectura.elv_base_proyecto ? 
+        parseFloat(lectura.elv_base_real) - parseFloat(lectura.elv_base_proyecto) : 0,
+      clasificacion: lectura.clasificacion
+    })).sort((a, b) => a.division - b.division);
+  }, [lecturas]);
+
+  // ✅ CORREGIDO: Renderizar gráfica simple
+  const renderGrafica = () => {
+    if (!datosGrafica.length) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+          <div className="text-center py-8">
+            <p className="text-gray-500">No hay datos para mostrar gráfica</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Complete algunas lecturas en la vista de captura para ver el perfil.
+            </p>
+          </div>
         </div>
-      ) : estaciones && estaciones.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {estaciones.map((estacion) => (
-            <div
-              key={estacion.id}
-              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <h4 className="font-semibold text-gray-900">{estacion.nombre}</h4>
-                <span className="text-xs text-gray-500">
-                  Est. {estacion.id}
-                </span>
-              </div>
+      );
+    }
+
+    // Filtrar datos válidos para la gráfica
+    const datosValidos = datosGrafica.filter(d => 
+      d.elevacionReal !== null && d.elevacionTeorica !== null
+    );
+
+    if (!datosValidos.length) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+          <div className="text-center py-8">
+            <p className="text-gray-500">Datos de elevación incompletos</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Las elevaciones se calculan automáticamente al guardar lecturas con un Banco de Nivel configurado.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    const maxElev = Math.max(...datosValidos.map(d => Math.max(d.elevacionReal, d.elevacionTeorica, d.elevacionConcreto || d.elevacionTeorica)));
+    const minElev = Math.min(...datosValidos.map(d => Math.min(d.elevacionReal, d.elevacionTeorica, d.elevacionConcreto || d.elevacionTeorica)));
+    const rango = maxElev - minElev || 1; // Evitar división por cero
+
+    return (
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+        
+        <div className="relative h-64 border border-gray-200 rounded bg-gray-50">
+          <svg width="100%" height="100%" className="absolute inset-0">
+            {/* Líneas de elevación */}
+            {datosValidos.map((punto, index) => {
+              const x = (index / (datosValidos.length - 1)) * 90 + 5; // 5% margen
+              const yReal = ((maxElev - punto.elevacionReal) / rango) * 80 + 10; // 10% margen
+              const yTeorica = ((maxElev - punto.elevacionTeorica) / rango) * 80 + 10;
+              const yConcreto = punto.elevacionConcreto ? 
+                ((maxElev - punto.elevacionConcreto) / rango) * 80 + 10 : yTeorica;
               
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="font-medium">X:</span> {formatNumber(estacion.coordenada_x, 3)}
-                  </div>
-                  <div>
-                    <span className="font-medium">Y:</span> {formatNumber(estacion.coordenada_y, 3)}
-                  </div>
-                </div>
-                <div>
-                  <span className="font-medium">Elevación:</span> {formatNumber(estacion.elevacion, 3)} m
-                </div>
-                {estacion.descripcion && (
-                  <p className="text-xs text-gray-500 mt-2">{estacion.descripcion}</p>
-                )}
-              </div>
-              
-              <div className="mt-3 flex gap-2">
-                <button className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
-                  Ver Lecturas
-                </button>
-                <button className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded">
-                  Nueva Medición
-                </button>
+              return (
+                <g key={index}>
+                  {/* Líneas conectoras */}
+                  {index > 0 && (
+                    <>
+                      {/* Línea teórica (azul) */}
+                      <line
+                        x1={`${((index - 1) / (datosValidos.length - 1)) * 90 + 5}%`}
+                        y1={`${((maxElev - datosValidos[index - 1].elevacionTeorica) / rango) * 80 + 10}%`}
+                        x2={`${x}%`}
+                        y2={`${yTeorica}%`}
+                        stroke="#3B82F6"
+                        strokeWidth="2"
+                      />
+                      
+                      {/* Línea real (rojo) */}
+                      <line
+                        x1={`${((index - 1) / (datosValidos.length - 1)) * 90 + 5}%`}
+                        y1={`${((maxElev - datosValidos[index - 1].elevacionReal) / rango) * 80 + 10}%`}
+                        x2={`${x}%`}
+                        y2={`${yReal}%`}
+                        stroke="#EF4444"
+                        strokeWidth="2"
+                      />
+                      
+                      {/* Línea concreto (verde) */}
+                      {punto.elevacionConcreto && datosValidos[index - 1].elevacionConcreto && (
+                        <line
+                          x1={`${((index - 1) / (datosValidos.length - 1)) * 90 + 5}%`}
+                          y1={`${((maxElev - datosValidos[index - 1].elevacionConcreto) / rango) * 80 + 10}%`}
+                          x2={`${x}%`}
+                          y2={`${yConcreto}%`}
+                          stroke="#10B981"
+                          strokeWidth="2"
+                        />
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Puntos */}
+                  <circle cx={`${x}%`} cy={`${yTeorica}%`} r="3" fill="#3B82F6" />
+                  <circle cx={`${x}%`} cy={`${yReal}%`} r="3" fill="#EF4444" />
+                  {punto.elevacionConcreto && (
+                    <circle cx={`${x}%`} cy={`${yConcreto}%`} r="3" fill="#10B981" />
+                  )}
+                  
+                  {/* Etiquetas de división */}
+                  <text x={`${x}%`} y="95%" textAnchor="middle" className="text-xs fill-gray-600">
+                    {punto.division}m
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        
+        {/* Leyenda */}
+        <div className="flex justify-center gap-6 mt-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-blue-500"></div>
+            <span>Teórico</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-red-500"></div>
+            <span>Real</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-green-500"></div>
+            <span>Concreto</span>
+          </div>
+        </div>
+        
+        {/* Tabla de diferencias */}
+        <div className="mt-6">
+          <h4 className="font-medium text-gray-900 mb-2">Análisis de Diferencias</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="bg-green-50 p-3 rounded">
+              <div className="text-green-800 font-medium">Cumple Tolerancia</div>
+              <div className="text-2xl font-bold text-green-600">
+                {datosGrafica.filter(d => d.clasificacion === 'CUMPLE').length}
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <div className="text-gray-400 mb-2">
-            <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <p className="text-gray-500">No hay estaciones registradas</p>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderMediciones = () => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">Mediciones Recientes</h3>
-        <button
-          onClick={() => {
-            setMostrarFormulario(true);
-            setVistaActiva('nueva-medicion');
-          }}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
-        >
-          Nueva Medición
-        </button>
-      </div>
-
-      {loadingMediciones ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse bg-gray-200 h-16 rounded"></div>
-          ))}
-        </div>
-      ) : mediciones && mediciones.length > 0 ? (
-        <div className="space-y-3">
-          {mediciones.map((medicion) => (
-            <div
-              key={medicion.id}
-              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium text-gray-900">
-                    Medición #{medicion.id}
-                  </h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Fecha: {formatDate(medicion.fecha_medicion)}
-                  </p>
-                </div>
-                
-                <div className="text-right text-sm text-gray-500">
-                  <div>T: {medicion.temperatura}°C</div>
-                  <div>H: {medicion.humedad}%</div>
-                </div>
+            <div className="bg-red-50 p-3 rounded">
+              <div className="text-red-800 font-medium">Requiere Corte</div>
+              <div className="text-2xl font-bold text-red-600">
+                {datosGrafica.filter(d => d.clasificacion === 'CORTE').length}
               </div>
-              
-              {medicion.observaciones && (
-                <p className="text-sm text-gray-600 mt-2">{medicion.observaciones}</p>
-              )}
             </div>
-          ))}
+            <div className="bg-yellow-50 p-3 rounded">
+              <div className="text-yellow-800 font-medium">Requiere Terraplén</div>
+              <div className="text-2xl font-bold text-yellow-600">
+                {datosGrafica.filter(d => d.clasificacion === 'TERRAPLEN').length}
+              </div>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="text-center py-8">
-          <div className="text-gray-400 mb-2">
-            <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </div>
+    );
+  };
+
+  // Si no hay proyecto seleccionado
+  if (!tieneProyecto) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="text-gray-400 mb-4">
+            <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
-          <p className="text-gray-500">No hay mediciones registradas</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Seleccione un Proyecto</h2>
+          <p className="text-gray-600 mb-4">
+            Para iniciar el trabajo de campo, primero seleccione un proyecto.
+          </p>
+          <button 
+            onClick={() => window.location.href = '/proyectos'}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-lg"
+          >
+            Ir a Proyectos
+          </button>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  // ✅ MEJORADO: Estados de carga con información específica
+  if (loadingEstaciones || loadingMediciones) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando datos del proyecto</h2>
+          <p className="text-gray-600">
+            {loadingEstaciones && 'Cargando estaciones...'}
+            {loadingMediciones && 'Cargando mediciones...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ MEJORADO: Manejo de errores específicos
+  if (errorEstaciones || errorMediciones) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="text-red-400 mb-4">
+            <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error cargando datos</h2>
+          <p className="text-gray-600 mb-4">
+            {errorEstaciones?.message || errorMediciones?.message || 'Error desconocido'}
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no hay estaciones
+  if (!estaciones.length) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No hay estaciones configuradas</h2>
+          <p className="text-gray-600">El proyecto seleccionado no tiene estaciones teóricas configuradas.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Trabajo de Campo</h1>
-        <p className="text-gray-600 mt-1">
-          Gestión de actividades y registros realizados en campo
-        </p>
-      </div>
-
-      {/* Estadísticas rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { 
-            label: 'Estaciones', 
-            valor: estaciones?.length || 0, 
-            color: 'blue',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              </svg>
-            )
-          },
-          { 
-            label: 'Mediciones', 
-            valor: mediciones?.length || 0, 
-            color: 'green',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z" />
-              </svg>
-            )
-          },
-          { 
-            label: 'Hoy', 
-            valor: mediciones?.filter(m => 
-              new Date(m.fecha_medicion).toDateString() === new Date().toDateString()
-            ).length || 0, 
-            color: 'yellow',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
-              </svg>
-            )
-          },
-          { 
-            label: 'Esta Semana', 
-            valor: mediciones?.filter(m => {
-              const medicionDate = new Date(m.fecha_medicion);
-              const weekAgo = new Date();
-              weekAgo.setDate(weekAgo.getDate() - 7);
-              return medicionDate >= weekAgo;
-            }).length || 0, 
-            color: 'purple',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            )
-          }
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className={`p-2 rounded-md bg-${stat.color}-100 text-${stat.color}-600`}>
-                {stat.icon}
-              </div>
-              <div className="ml-4">
-                <dt className="text-sm font-medium text-gray-500">{stat.label}</dt>
-                <dd className={`text-2xl font-semibold text-${stat.color}-600`}>
-                  {stat.valor}
-                </dd>
-              </div>
-            </div>
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Header con navegación de estaciones */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Registro de Campo</h1>
+            <p className="text-gray-600">{proyecto.nombre} - {proyecto.tramo}</p>
           </div>
-        ))}
-      </div>
-
-      {/* Navegación de pestañas */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          {[
-            { id: 'estaciones', label: 'Estaciones', icon: '🎯' },
-            { id: 'mediciones', label: 'Mediciones', icon: '📏' },
-            { id: 'lecturas', label: 'Lecturas', icon: '📊' }
-          ].map((tab) => (
+          
+          {/* Navegación de vistas */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
             <button
-              key={tab.id}
-              onClick={() => setVistaActiva(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                vistaActiva === tab.id
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              onClick={() => setVistaActiva('captura')}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                vistaActiva === 'captura' 
+                  ? 'bg-white text-gray-900 shadow' 
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <span className="mr-2">{tab.icon}</span>
-              {tab.label}
+              📝 Captura
             </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Contenido según pestaña activa */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        {vistaActiva === 'estaciones' && renderEstaciones()}
-        {vistaActiva === 'mediciones' && renderMediciones()}
-        {vistaActiva === 'lecturas' && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Vista de lecturas en desarrollo...</p>
+            <button
+              onClick={() => setVistaActiva('graficas')}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                vistaActiva === 'graficas' 
+                  ? 'bg-white text-gray-900 shadow' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              📊 Gráficas
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Navegación entre estaciones */}
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+          <button
+            onClick={() => irAEstacion('anterior')}
+            disabled={estacionActual === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-lg"
+          >
+            ← Anterior
+          </button>
+          
+          <div className="text-center">
+            <div className="text-sm text-gray-600">Estación</div>
+            <div className="text-2xl font-bold text-gray-900">
+              KM {formatearKM(estacionSeleccionada?.km)}
+            </div>
+            <div className="text-sm text-gray-500">
+              {estacionActual + 1} de {estaciones.length}
+            </div>
+          </div>
+          
+          <button
+            onClick={() => irAEstacion('siguiente')}
+            disabled={estacionActual === estaciones.length - 1}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-lg"
+          >
+            Siguiente →
+          </button>
+        </div>
       </div>
 
-      {/* Modal para formularios */}
-      {mostrarFormulario && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
-                {vistaActiva === 'nueva-estacion' ? 'Nueva Estación' : 'Nueva Medición'}
-              </h3>
+      {/* Contenido principal */}
+      {vistaActiva === 'captura' ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          {/* Información de la estación */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <h3 className="font-semibold text-blue-900 mb-2">Información de la Estación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-blue-700">Pendiente Derecha:</span>
+                <span className="ml-2 font-medium">{formatNumber(estacionSeleccionada.pendiente_derecha, 4)}</span>
+              </div>
+              <div>
+                <span className="text-blue-700">Base CL:</span>
+                <span className="ml-2 font-medium">{formatNumber(estacionSeleccionada.base_cl, 3)}m</span>
+              </div>
+              <div>
+                <span className="text-blue-700">Tolerancia SCT:</span>
+                <span className="ml-2 font-medium">±{formatNumber(informacionProyecto?.toleranciaSct * 1000, 1)}mm</span>
+              </div>
             </div>
-            
-            {vistaActiva === 'nueva-estacion' ? (
-              <form onSubmit={handleSubmitEstacion} className="px-6 py-4 space-y-4">
+          </div>
+
+          {/* Banco de Nivel */}
+          {!medicionActiva ? (
+            <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <h3 className="font-semibold text-yellow-900 mb-4">Configurar Banco de Nivel</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Nombre</label>
-                  <input
-                    type="text"
-                    required
-                    value={formDataEstacion.nombre}
-                    onChange={(e) => setFormDataEstacion({...formDataEstacion, nombre: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Coordenada X</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      required
-                      value={formDataEstacion.coordenada_x}
-                      onChange={(e) => setFormDataEstacion({...formDataEstacion, coordenada_x: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Coordenada Y</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      required
-                      value={formDataEstacion.coordenada_y}
-                      onChange={(e) => setFormDataEstacion({...formDataEstacion, coordenada_y: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Elevación (m)</label>
+                  <label className="block text-sm font-medium text-yellow-800 mb-1">
+                    Altura BN (m)
+                  </label>
                   <input
                     type="number"
                     step="0.001"
-                    required
-                    value={formDataEstacion.elevacion}
-                    onChange={(e) => setFormDataEstacion({...formDataEstacion, elevacion: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    value={datoBN.altura}
+                    onChange={(e) => setDatoBN({...datoBN, altura: e.target.value})}
+                    className="w-full px-3 py-2 border border-yellow-300 rounded text-lg text-center"
+                    placeholder="1883.021"
                   />
                 </div>
-                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Descripción</label>
-                  <textarea
-                    value={formDataEstacion.descripcion}
-                    onChange={(e) => setFormDataEstacion({...formDataEstacion, descripcion: e.target.value})}
-                    rows="3"
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-                
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarFormulario(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={createEstacion.isLoading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
-                  >
-                    {createEstacion.isLoading ? 'Creando...' : 'Crear Estación'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleSubmitMedicion} className="px-6 py-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Estación</label>
-                  <select
-                    required
-                    value={formDataMedicion.estacion_id}
-                    onChange={(e) => setFormDataMedicion({...formDataMedicion, estacion_id: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">Seleccionar estación</option>
-                    {estaciones?.map((estacion) => (
-                      <option key={estacion.id} value={estacion.id}>
-                        {estacion.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Fecha</label>
+                  <label className="block text-sm font-medium text-yellow-800 mb-1">
+                    Lectura BN (m)
+                  </label>
                   <input
-                    type="date"
-                    required
-                    value={formDataMedicion.fecha_medicion}
-                    onChange={(e) => setFormDataMedicion({...formDataMedicion, fecha_medicion: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    type="number"
+                    step="0.001"
+                    value={datoBN.lectura}
+                    onChange={(e) => setDatoBN({...datoBN, lectura: e.target.value})}
+                    className="w-full px-3 py-2 border border-yellow-300 rounded text-lg text-center"
+                    placeholder="3.289"
                   />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Temperatura (°C)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formDataMedicion.temperatura}
-                      onChange={(e) => setFormDataMedicion({...formDataMedicion, temperatura: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Humedad (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formDataMedicion.humedad}
-                      onChange={(e) => setFormDataMedicion({...formDataMedicion, humedad: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleCrearMedicion}
+                    disabled={!datoBN.altura || !datoBN.lectura || createMedicion.isLoading}
+                    className="w-full px-4 py-2 bg-yellow-600 text-white rounded text-lg font-medium hover:bg-yellow-700 disabled:bg-gray-300"
+                  >
+                    {createMedicion.isLoading ? 'Configurando...' : 'Configurar'}
+                  </button>
                 </div>
-                
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+              <h3 className="font-semibold text-green-900 mb-2">Banco de Nivel Configurado</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Observaciones</label>
-                  <textarea
-                    value={formDataMedicion.observaciones}
-                    onChange={(e) => setFormDataMedicion({...formDataMedicion, observaciones: e.target.value})}
-                    rows="3"
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                  <span className="text-green-700">Altura BN:</span>
+                  <span className="ml-2 font-medium">{formatNumber(medicionActiva.bn_altura, 3)}m</span>
                 </div>
-                
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarFormulario(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={createMedicion.isLoading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
-                  >
-                    {createMedicion.isLoading ? 'Creando...' : 'Crear Medición'}
-                  </button>
+                <div>
+                  <span className="text-green-700">Lectura BN:</span>
+                  <span className="ml-2 font-medium">{formatNumber(medicionActiva.bn_lectura, 3)}m</span>
                 </div>
-              </form>
-            )}
-          </div>
+                <div>
+                  <span className="text-green-700">Altura Aparato:</span>
+                  <span className="ml-2 font-medium text-lg">{formatNumber(medicionActiva.altura_aparato, 3)}m</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tabla de lecturas estilo Excel */}
+          {medicionActiva && (
+            <div className="border border-gray-300 rounded-lg overflow-hidden">
+              {/* Indicador de carga */}
+              {loadingLecturas && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-blue-700">
+                        Cargando lecturas de la medición {medicionActiva.id}...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Error de carga */}
+              {errorLecturas && (
+                <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-700">
+                        Error cargando lecturas: {errorLecturas.message}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <table className="w-full">
+                <thead className="bg-blue-600 text-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">ESTACION</th>
+                    <th className="px-4 py-3 text-center font-semibold">+</th>
+                    <th className="px-4 py-3 text-center font-semibold">Altura de Aparato</th>
+                    <th className="px-4 py-3 text-center font-semibold">-</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-gray-50">
+                    <td className="px-4 py-2 font-medium">BN</td>
+                    <td className="px-4 py-2 text-center">{formatNumber(medicionActiva.bn_lectura, 3)}</td>
+                    <td className="px-4 py-2 text-center font-bold text-lg">
+                      {formatNumber(medicionActiva.altura_aparato, 3)}
+                    </td>
+                    <td className="px-4 py-2 text-center">-</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-medium">{formatearKM(estacionSeleccionada.km)}</td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2"></td>
+                  </tr>
+                  
+                  {/* Filas para cada división transversal */}
+                  {divisiones.map((division, index) => {
+                    const lectura = getLectura(division);
+                    const lecturaObj = lecturas.find(l => Math.abs(parseFloat(l.division_transversal) - parseFloat(division)) < 0.01);
+                    
+                    return (
+                      <tr key={`division-${index}-${division}`} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-center font-medium">
+                          {division === 0 ? '0.00' : formatNumber(Math.abs(division), 2)}
+                          {division < 0 ? ' (I)' : division > 0 ? ' (D)' : ''}
+                        </td>
+                        <td className="px-4 py-2"></td>
+                        <td className="px-4 py-2"></td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={lectura}
+                            onChange={(e) => {
+                              if (e.target.value && e.target.value !== lectura) {
+                                handleGuardarLectura(division, e.target.value);
+                              }
+                            }}
+                            className={`w-full px-2 py-1 text-center border rounded text-lg ${
+                              lecturaObj?.clasificacion === 'CUMPLE' ? 'bg-green-50 border-green-300' :
+                              lecturaObj?.clasificacion === 'CORTE' ? 'bg-red-50 border-red-300' :
+                              lecturaObj?.clasificacion === 'TERRAPLEN' ? 'bg-yellow-50 border-yellow-300' :
+                              'border-gray-300'
+                            }`}
+                            placeholder="0.000"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Indicador de progreso */}
+          {medicionActiva && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">Progreso de Lecturas</span>
+                <span className="text-sm text-gray-500">
+                  {lecturas.length} de {divisiones.length} completadas
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div 
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${(lecturas.length / divisiones.length) * 100}%` }}
+                ></div>
+              </div>
+              
+              {/* Debug info en desarrollo */}
+              {import.meta.env.DEV && (
+                <details className="mt-2">
+                  <summary className="text-xs text-gray-500 cursor-pointer">Debug Info</summary>
+                  <div className="mt-2 text-xs text-gray-600 bg-white p-2 rounded border">
+                    <div><strong>Medición ID:</strong> {medicionActiva?.id}</div>
+                    <div><strong>Loading:</strong> {String(loadingLecturas)}</div>
+                    <div><strong>Error:</strong> {errorLecturas?.message || 'Ninguno'}</div>
+                    <div><strong>Lecturas en estado:</strong> {lecturas.length}</div>
+                    <div><strong>Divisiones esperadas:</strong> {JSON.stringify(divisiones)}</div>
+                    {lecturas.length > 0 && (
+                      <>
+                        <div><strong>Divisiones en lecturas:</strong> {JSON.stringify(lecturas.map(l => l.division_transversal))}</div>
+                        <div><strong>Clasificaciones:</strong> {JSON.stringify(lecturas.map(l => l.clasificacion))}</div>
+                      </>
+                    )}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Vista de gráficas */
+        renderGrafica()
+      )}
+
+      {/* Estado de guardado */}
+      {createLectura.isLoading && (
+        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          Guardando lectura...
+        </div>
+      )}
+      
+      {createMedicion.isLoading && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          Creando medición...
         </div>
       )}
     </div>
