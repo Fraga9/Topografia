@@ -6,9 +6,17 @@ import {
   useCreateMedicion,
 } from '../hooks';
 import { useLecturas, useCreateLectura } from '../hooks/lecturas';
+import { useRealTimeProject } from '../hooks/useRealTimeProject';
+import { useRefreshProject } from '../hooks/useRefreshProject';
 
 const Campo = () => {
   const { proyecto, tieneProyecto, formatearKM, informacionProyecto } = useProyecto();
+  
+  // Activar tiempo real para sincronización automática
+  const { isConnected, forceRefresh } = useRealTimeProject();
+  
+  // Hook para actualización manual más potente
+  const { refreshCurrentProject } = useRefreshProject();
   
   // Estados principales
   const [estacionActual, setEstacionActual] = useState(0);
@@ -34,14 +42,23 @@ const Campo = () => {
     error: errorMediciones 
   } = useMediciones({ proyecto_id: proyecto?.id, enabled: !!proyecto?.id });
 
-  // ✅ CORREGIDO: Divisiones transversales estándar del proyecto
+  // ✅ CORREGIDO: Divisiones transversales del proyecto sin 0 forzado
   const divisiones = React.useMemo(() => {
     if (!informacionProyecto) return [];
     
     const izquierdas = [...(informacionProyecto.divisionesIzquierdas || [])].reverse();
     const derechas = informacionProyecto.divisionesDerechas || [];
     
-    return [...izquierdas, 0, ...derechas];
+    // Solo incluir 0 si está explícitamente en las divisiones
+    const todasLasDivisiones = [...izquierdas, ...derechas];
+    
+    // Verificar si 0 está ya incluido en alguna de las divisiones
+    const tieneEjeEnDivisiones = todasLasDivisiones.includes(0);
+    
+    // Si no tiene 0 explícito, no lo añadimos automáticamente
+    return tieneEjeEnDivisiones 
+      ? todasLasDivisiones.sort((a, b) => a - b)
+      : todasLasDivisiones.sort((a, b) => a - b);
   }, [informacionProyecto]);
 
   // ✅ CORREGIDO: Hook de lecturas con mejor manejo
@@ -70,7 +87,7 @@ const Campo = () => {
         return Math.abs(kmEstacion - kmMedicion) < 0.001; // Tolerancia para decimales
       });
       
-      console.log('🔍 Buscando medición para estación:', {
+      console.log('Buscando medición para estación:', {
         estacionKm: estacionSeleccionada.km,
         medicionesDisponibles: mediciones.map(m => ({ id: m.id, km: m.estacion_km })),
         medicionEncontrada: medicion
@@ -82,38 +99,38 @@ const Campo = () => {
 
   // ✅ MEJORADO: Debug de datos recibidos
   React.useEffect(() => {
-    console.group('📊 Debug Campo - Datos del Backend');
-    console.log('🏗️ Proyecto:', { id: proyecto?.id, nombre: proyecto?.nombre });
-    console.log('📍 Estaciones:', { 
+    console.group('Debug Campo - Datos del Backend');
+    console.log('Proyecto:', { id: proyecto?.id, nombre: proyecto?.nombre });
+    console.log('Estaciones:', { 
       cantidad: estaciones.length, 
       loading: loadingEstaciones,
       error: errorEstaciones?.message,
       muestra: estaciones[0] 
     });
-    console.log('📏 Mediciones:', { 
+    console.log('Mediciones:', { 
       cantidad: mediciones.length,
       loading: loadingMediciones, 
       error: errorMediciones?.message,
       muestra: mediciones[0]
     });
-    console.log('🎯 Medición Activa:', medicionActiva);
-    console.log('📖 Lecturas:', {
+    console.log('Medición Activa:', medicionActiva);
+    console.log('Lecturas:', {
       cantidad: lecturas.length,
       loading: loadingLecturas,
       error: errorLecturas?.message,
       estructura: lecturas[0] ? Object.keys(lecturas[0]) : [],
       muestra: lecturas[0]
     });
-    console.log('🎛️ Configuración:', {
+    console.log('Configuración:', {
       informacionProyecto,
       divisiones: divisiones.length ? divisiones : 'No configuradas'
     });
     
     // Debug específico de lecturas si hay datos
     if (lecturas.length > 0) {
-      console.log('🔍 Análisis de lecturas:');
+      console.log('Análisis de lecturas:');
       lecturas.forEach(lectura => {
-        console.log(`  📐 División: ${lectura.division_transversal}m, Lectura: ${lectura.lectura_mira}m, Clasificación: ${lectura.clasificacion || 'Sin clasificar'}`);
+        console.log(`  División: ${lectura.division_transversal}m, Lectura: ${lectura.lectura_mira}m, Clasificación: ${lectura.clasificacion || 'Sin clasificar'}`);
       });
     }
     
@@ -142,9 +159,9 @@ const Campo = () => {
         fecha_medicion: new Date().toISOString().split('T')[0]
       };
 
-      console.log('🔄 Creando medición:', nuevaMedicion);
+      console.log('Creando medición:', nuevaMedicion);
       const resultado = await createMedicion.mutateAsync(nuevaMedicion);
-      console.log('✅ Medición creada:', resultado);
+      console.log('Medición creada:', resultado);
       
       setMedicionActiva(resultado);
       
@@ -152,7 +169,7 @@ const Campo = () => {
       setDatoBN({ altura: '', lectura: '' });
       
     } catch (error) {
-      console.error('❌ Error creando medición:', error);
+      console.error('Error creando medición:', error);
       alert('Error al crear medición: ' + (error.response?.data?.detail || error.message));
     }
   };
@@ -162,7 +179,7 @@ const Campo = () => {
     if (!medicionActiva || !valor) return;
 
     try {
-      console.log('🔄 Guardando lectura:', { 
+      console.log('Guardando lectura:', { 
         medicion_id: medicionActiva.id, 
         division_transversal: division, 
         lectura_mira: valor 
@@ -175,7 +192,7 @@ const Campo = () => {
       };
 
       const resultado = await createLectura.mutateAsync(nuevaLectura);
-      console.log('✅ Lectura guardada:', resultado);
+      console.log('Lectura guardada:', resultado);
       
       // Refrescar lecturas para mostrar la nueva
       setTimeout(() => {
@@ -183,7 +200,7 @@ const Campo = () => {
       }, 500);
       
     } catch (error) {
-      console.error('❌ Error guardando lectura:', error);
+      console.error('Error guardando lectura:', error);
       alert('Error al guardar lectura: ' + (error.response?.data?.detail || error.message));
     }
   };
@@ -216,7 +233,7 @@ const Campo = () => {
     
     // Debug para diagnosticar (solo para división 1.3)
     if (division === 1.3 && import.meta.env.DEV) {
-      console.log(`🔍 getLectura Debug para división ${division}:`, {
+      console.log(`getLectura Debug para división ${division}:`, {
         division,
         lecturas: lecturas.map(l => ({ 
           id: l.id, 
@@ -250,11 +267,11 @@ const Campo = () => {
   const renderGrafica = () => {
     if (!datosGrafica.length) {
       return (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
-          <div className="text-center py-8">
-            <p className="text-gray-500">No hay datos para mostrar gráfica</p>
-            <p className="text-sm text-gray-400 mt-2">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-6">
+          <h3 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+          <div className="text-center py-6 lg:py-8">
+            <p className="text-gray-500 text-sm lg:text-base">No hay datos para mostrar gráfica</p>
+            <p className="text-xs lg:text-sm text-gray-400 mt-2">
               Complete algunas lecturas en la vista de captura para ver el perfil.
             </p>
           </div>
@@ -269,11 +286,11 @@ const Campo = () => {
 
     if (!datosValidos.length) {
       return (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
-          <div className="text-center py-8">
-            <p className="text-gray-500">Datos de elevación incompletos</p>
-            <p className="text-sm text-gray-400 mt-2">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-6">
+          <h3 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+          <div className="text-center py-6 lg:py-8">
+            <p className="text-gray-500 text-sm lg:text-base">Datos de elevación incompletos</p>
+            <p className="text-xs lg:text-sm text-gray-400 mt-2">
               Las elevaciones se calculan automáticamente al guardar lecturas con un Banco de Nivel configurado.
             </p>
           </div>
@@ -286,10 +303,10 @@ const Campo = () => {
     const rango = maxElev - minElev || 1; // Evitar división por cero
 
     return (
-      <div className="bg-white p-6 rounded-lg border">
-        <h3 className="text-lg font-semibold mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
+      <div className="bg-white p-3 lg:p-6 rounded-lg border">
+        <h3 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
         
-        <div className="relative h-64 border border-gray-200 rounded bg-gray-50">
+        <div className="relative h-48 lg:h-64 border border-gray-200 rounded bg-gray-50">
           <svg width="100%" height="100%" className="absolute inset-0">
             {/* Líneas de elevación */}
             {datosValidos.map((punto, index) => {
@@ -356,7 +373,7 @@ const Campo = () => {
         </div>
         
         {/* Leyenda */}
-        <div className="flex justify-center gap-6 mt-4 text-sm">
+        <div className="flex flex-wrap justify-center gap-3 lg:gap-6 mt-3 lg:mt-4 text-xs lg:text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-blue-500"></div>
             <span>Teórico</span>
@@ -372,24 +389,24 @@ const Campo = () => {
         </div>
         
         {/* Tabla de diferencias */}
-        <div className="mt-6">
-          <h4 className="font-medium text-gray-900 mb-2">Análisis de Diferencias</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div className="mt-4 lg:mt-6">
+          <h4 className="font-medium text-gray-900 mb-2 text-sm lg:text-base">Análisis de Diferencias</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 text-xs lg:text-sm">
             <div className="bg-green-50 p-3 rounded">
               <div className="text-green-800 font-medium">Cumple Tolerancia</div>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-xl lg:text-2xl font-bold text-green-600">
                 {datosGrafica.filter(d => d.clasificacion === 'CUMPLE').length}
               </div>
             </div>
             <div className="bg-red-50 p-3 rounded">
               <div className="text-red-800 font-medium">Requiere Corte</div>
-              <div className="text-2xl font-bold text-red-600">
+              <div className="text-xl lg:text-2xl font-bold text-red-600">
                 {datosGrafica.filter(d => d.clasificacion === 'CORTE').length}
               </div>
             </div>
             <div className="bg-yellow-50 p-3 rounded">
               <div className="text-yellow-800 font-medium">Requiere Terraplén</div>
-              <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-xl lg:text-2xl font-bold text-yellow-600">
                 {datosGrafica.filter(d => d.clasificacion === 'TERRAPLEN').length}
               </div>
             </div>
@@ -478,56 +495,74 @@ const Campo = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-6xl mx-auto p-3 lg:p-6 space-y-4 lg:space-y-6">
       {/* Header con navegación de estaciones */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 space-y-3 lg:space-y-0">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Registro de Campo</h1>
-            <p className="text-gray-600">{proyecto.nombre} - {proyecto.tramo}</p>
+            <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Registro de Campo</h1>
+            <p className="text-sm lg:text-base text-gray-600">{proyecto.nombre} - {proyecto.tramo}</p>
           </div>
           
-          {/* Navegación de vistas */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          {/* Navegación de vistas y controles */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            {/* Indicador de tiempo real */}
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span>{isConnected ? 'Tiempo real activo' : 'Sin conexión TR'}</span>
+            </div>
+            
+            {/* Botón de actualización manual mejorado */}
             <button
-              onClick={() => setVistaActiva('captura')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                vistaActiva === 'captura' 
-                  ? 'bg-white text-gray-900 shadow' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+              onClick={refreshCurrentProject}
+              className="px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 rounded text-blue-700 font-medium"
+              title="Actualizar proyecto completo desde base de datos"
             >
-              📝 Captura
+              🔄 Refrescar Proyecto
             </button>
-            <button
-              onClick={() => setVistaActiva('graficas')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                vistaActiva === 'graficas' 
-                  ? 'bg-white text-gray-900 shadow' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              📊 Gráficas
-            </button>
+            
+            {/* Navegación de vistas */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setVistaActiva('captura')}
+                className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
+                  vistaActiva === 'captura' 
+                    ? 'bg-white text-gray-900 shadow' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Captura
+              </button>
+              <button
+                onClick={() => setVistaActiva('graficas')}
+                className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
+                  vistaActiva === 'graficas' 
+                    ? 'bg-white text-gray-900 shadow' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Gráficas
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Navegación entre estaciones */}
-        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3 lg:p-4">
           <button
             onClick={() => irAEstacion('anterior')}
             disabled={estacionActual === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-lg"
+            className="flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-sm lg:text-base"
           >
-            ← Anterior
+            <span className="hidden sm:inline">←</span> Anterior
           </button>
           
           <div className="text-center">
-            <div className="text-sm text-gray-600">Estación</div>
-            <div className="text-2xl font-bold text-gray-900">
+            <div className="text-xs lg:text-sm text-gray-600">Estación</div>
+            <div className="text-lg lg:text-2xl font-bold text-gray-900">
               KM {formatearKM(estacionSeleccionada?.km)}
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-xs lg:text-sm text-gray-500">
               {estacionActual + 1} de {estaciones.length}
             </div>
           </div>
@@ -535,42 +570,42 @@ const Campo = () => {
           <button
             onClick={() => irAEstacion('siguiente')}
             disabled={estacionActual === estaciones.length - 1}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-lg"
+            className="flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:text-gray-500 text-sm lg:text-base"
           >
-            Siguiente →
+            Siguiente <span className="hidden sm:inline">→</span>
           </button>
         </div>
       </div>
 
       {/* Contenido principal */}
       {vistaActiva === 'captura' ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-6">
           {/* Información de la estación */}
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-semibold text-blue-900 mb-2">Información de la Estación</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-blue-700">Pendiente Derecha:</span>
-                <span className="ml-2 font-medium">{formatNumber(estacionSeleccionada.pendiente_derecha, 4)}</span>
+          <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-blue-50 rounded-lg">
+            <h3 className="font-semibold text-blue-900 mb-2 text-sm lg:text-base">Información de la Estación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 lg:gap-4 text-xs lg:text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="text-blue-700 font-medium">Pendiente Derecha:</span>
+                <span className="sm:ml-2 font-medium">{formatNumber(estacionSeleccionada.pendiente_derecha, 4)}</span>
               </div>
-              <div>
-                <span className="text-blue-700">Base CL:</span>
-                <span className="ml-2 font-medium">{formatNumber(estacionSeleccionada.base_cl, 3)}m</span>
+              <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="text-blue-700 font-medium">Base CL:</span>
+                <span className="sm:ml-2 font-medium">{formatNumber(estacionSeleccionada.base_cl, 3)}m</span>
               </div>
-              <div>
-                <span className="text-blue-700">Tolerancia SCT:</span>
-                <span className="ml-2 font-medium">±{formatNumber(informacionProyecto?.toleranciaSct * 1000, 1)}mm</span>
+              <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="text-blue-700 font-medium">Tolerancia SCT:</span>
+                <span className="sm:ml-2 font-medium">±{formatNumber(informacionProyecto?.toleranciaSct * 1000, 1)}mm</span>
               </div>
             </div>
           </div>
 
           {/* Banco de Nivel */}
           {!medicionActiva ? (
-            <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <h3 className="font-semibold text-yellow-900 mb-4">Configurar Banco de Nivel</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <h3 className="font-semibold text-yellow-900 mb-3 lg:mb-4 text-sm lg:text-base">Configurar Banco de Nivel</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-yellow-800 mb-1">
+                  <label className="block text-xs lg:text-sm font-medium text-yellow-800 mb-1">
                     Altura BN (m)
                   </label>
                   <input
@@ -578,12 +613,12 @@ const Campo = () => {
                     step="0.001"
                     value={datoBN.altura}
                     onChange={(e) => setDatoBN({...datoBN, altura: e.target.value})}
-                    className="w-full px-3 py-2 border border-yellow-300 rounded text-lg text-center"
+                    className="w-full px-2 lg:px-3 py-2 border border-yellow-300 rounded text-base lg:text-lg text-center"
                     placeholder="1883.021"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-yellow-800 mb-1">
+                  <label className="block text-xs lg:text-sm font-medium text-yellow-800 mb-1">
                     Lectura BN (m)
                   </label>
                   <input
@@ -591,7 +626,7 @@ const Campo = () => {
                     step="0.001"
                     value={datoBN.lectura}
                     onChange={(e) => setDatoBN({...datoBN, lectura: e.target.value})}
-                    className="w-full px-3 py-2 border border-yellow-300 rounded text-lg text-center"
+                    className="w-full px-2 lg:px-3 py-2 border border-yellow-300 rounded text-base lg:text-lg text-center"
                     placeholder="3.289"
                   />
                 </div>
@@ -599,7 +634,7 @@ const Campo = () => {
                   <button
                     onClick={handleCrearMedicion}
                     disabled={!datoBN.altura || !datoBN.lectura || createMedicion.isLoading}
-                    className="w-full px-4 py-2 bg-yellow-600 text-white rounded text-lg font-medium hover:bg-yellow-700 disabled:bg-gray-300"
+                    className="w-full px-3 lg:px-4 py-2 bg-yellow-600 text-white rounded text-sm lg:text-base font-medium hover:bg-yellow-700 disabled:bg-gray-300"
                   >
                     {createMedicion.isLoading ? 'Configurando...' : 'Configurar'}
                   </button>
@@ -607,20 +642,20 @@ const Campo = () => {
               </div>
             </div>
           ) : (
-            <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
-              <h3 className="font-semibold text-green-900 mb-2">Banco de Nivel Configurado</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-green-700">Altura BN:</span>
-                  <span className="ml-2 font-medium">{formatNumber(medicionActiva.bn_altura, 3)}m</span>
+            <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-green-50 rounded-lg border border-green-200">
+              <h3 className="font-semibold text-green-900 mb-2 text-sm lg:text-base">Banco de Nivel Configurado</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 lg:gap-4 text-xs lg:text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center">
+                  <span className="text-green-700 font-medium">Altura BN:</span>
+                  <span className="sm:ml-2 font-medium">{formatNumber(medicionActiva.bn_altura, 3)}m</span>
                 </div>
-                <div>
-                  <span className="text-green-700">Lectura BN:</span>
-                  <span className="ml-2 font-medium">{formatNumber(medicionActiva.bn_lectura, 3)}m</span>
+                <div className="flex flex-col sm:flex-row sm:items-center">
+                  <span className="text-green-700 font-medium">Lectura BN:</span>
+                  <span className="sm:ml-2 font-medium">{formatNumber(medicionActiva.bn_lectura, 3)}m</span>
                 </div>
-                <div>
-                  <span className="text-green-700">Altura Aparato:</span>
-                  <span className="ml-2 font-medium text-lg">{formatNumber(medicionActiva.altura_aparato, 3)}m</span>
+                <div className="flex flex-col sm:flex-row sm:items-center">
+                  <span className="text-green-700 font-medium">Altura Aparato:</span>
+                  <span className="sm:ml-2 font-medium text-base lg:text-lg">{formatNumber(medicionActiva.altura_aparato, 3)}m</span>
                 </div>
               </div>
             </div>
@@ -628,7 +663,7 @@ const Campo = () => {
 
           {/* Tabla de lecturas estilo Excel */}
           {medicionActiva && (
-            <div className="border border-gray-300 rounded-lg overflow-hidden">
+            <div className="border border-gray-300 rounded-lg overflow-x-auto overflow-y-hidden">
               {/* Indicador de carga */}
               {loadingLecturas && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
@@ -663,29 +698,29 @@ const Campo = () => {
                 </div>
               )}
               
-              <table className="w-full">
+              <table className="w-full min-w-[600px]">
                 <thead className="bg-blue-600 text-white">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold">ESTACION</th>
-                    <th className="px-4 py-3 text-center font-semibold">+</th>
-                    <th className="px-4 py-3 text-center font-semibold">Altura de Aparato</th>
-                    <th className="px-4 py-3 text-center font-semibold">-</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-semibold text-xs lg:text-sm">ESTACION</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">+</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">Altura de Aparato</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">-</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="bg-gray-50">
-                    <td className="px-4 py-2 font-medium">BN</td>
-                    <td className="px-4 py-2 text-center">{formatNumber(medicionActiva.bn_lectura, 3)}</td>
-                    <td className="px-4 py-2 text-center font-bold text-lg">
+                    <td className="px-2 lg:px-4 py-2 font-medium text-xs lg:text-sm">BN</td>
+                    <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">{formatNumber(medicionActiva.bn_lectura, 3)}</td>
+                    <td className="px-2 lg:px-4 py-2 text-center font-bold text-sm lg:text-lg">
                       {formatNumber(medicionActiva.altura_aparato, 3)}
                     </td>
-                    <td className="px-4 py-2 text-center">-</td>
+                    <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">-</td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-2 font-medium">{formatearKM(estacionSeleccionada.km)}</td>
-                    <td className="px-4 py-2"></td>
-                    <td className="px-4 py-2"></td>
-                    <td className="px-4 py-2"></td>
+                    <td className="px-2 lg:px-4 py-2 font-medium text-xs lg:text-sm">{formatearKM(estacionSeleccionada.km)}</td>
+                    <td className="px-2 lg:px-4 py-2"></td>
+                    <td className="px-2 lg:px-4 py-2"></td>
+                    <td className="px-2 lg:px-4 py-2"></td>
                   </tr>
                   
                   {/* Filas para cada división transversal */}
@@ -695,13 +730,13 @@ const Campo = () => {
                     
                     return (
                       <tr key={`division-${index}-${division}`} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 text-center font-medium">
+                        <td className="px-2 lg:px-4 py-2 text-center font-medium text-xs lg:text-sm">
                           {division === 0 ? '0.00' : formatNumber(Math.abs(division), 2)}
                           {division < 0 ? ' (I)' : division > 0 ? ' (D)' : ''}
                         </td>
-                        <td className="px-4 py-2"></td>
-                        <td className="px-4 py-2"></td>
-                        <td className="px-4 py-2">
+                        <td className="px-2 lg:px-4 py-2"></td>
+                        <td className="px-2 lg:px-4 py-2"></td>
+                        <td className="px-2 lg:px-4 py-2">
                           <input
                             type="number"
                             step="0.001"
@@ -711,7 +746,7 @@ const Campo = () => {
                                 handleGuardarLectura(division, e.target.value);
                               }
                             }}
-                            className={`w-full px-2 py-1 text-center border rounded text-lg ${
+                            className={`w-full px-2 py-2 text-center border rounded text-sm lg:text-base min-w-[100px] ${
                               lecturaObj?.clasificacion === 'CUMPLE' ? 'bg-green-50 border-green-300' :
                               lecturaObj?.clasificacion === 'CORTE' ? 'bg-red-50 border-red-300' :
                               lecturaObj?.clasificacion === 'TERRAPLEN' ? 'bg-yellow-50 border-yellow-300' :
@@ -730,10 +765,10 @@ const Campo = () => {
 
           {/* Indicador de progreso */}
           {medicionActiva && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Progreso de Lecturas</span>
-                <span className="text-sm text-gray-500">
+            <div className="mt-3 lg:mt-4 p-3 lg:p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 space-y-1 sm:space-y-0">
+                <span className="text-xs lg:text-sm font-medium text-gray-700">Progreso de Lecturas</span>
+                <span className="text-xs lg:text-sm text-gray-500">
                   {lecturas.length} de {divisiones.length} completadas
                 </span>
               </div>
@@ -773,13 +808,13 @@ const Campo = () => {
 
       {/* Estado de guardado */}
       {createLectura.isLoading && (
-        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-3 right-3 lg:bottom-4 lg:right-4 bg-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg shadow-lg text-sm lg:text-base">
           Guardando lectura...
         </div>
       )}
       
       {createMedicion.isLoading && (
-        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-3 right-3 lg:bottom-4 lg:right-4 bg-green-600 text-white px-3 lg:px-4 py-2 rounded-lg shadow-lg text-sm lg:text-base">
           Creando medición...
         </div>
       )}

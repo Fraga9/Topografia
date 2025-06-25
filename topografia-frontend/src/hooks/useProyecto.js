@@ -1,4 +1,5 @@
 // hooks/useProyecto.js - Versión mejorada que usa datos más completos
+import React from 'react';
 import { useProyectoSeleccionado } from '../context/ProyectoContext';
 
 export const useProyecto = () => {
@@ -21,6 +22,19 @@ export const useProyecto = () => {
   const descripcionCompleta = proyectoSeleccionado 
     ? `${proyectoSeleccionado.nombre} - ${proyectoSeleccionado.tramo}, Cuerpo ${proyectoSeleccionado.cuerpo || 'N/A'}`
     : '';
+
+  // Debug para identificar problema con divisiones
+  React.useEffect(() => {
+    if (proyectoSeleccionado && process.env.NODE_ENV === 'development') {
+      console.group('🔍 Debug useProyecto - Divisiones');
+      console.log('Proyecto completo:', proyectoSeleccionado);
+      console.log('divisiones_izquierdas raw:', proyectoSeleccionado.divisiones_izquierdas);
+      console.log('divisiones_derechas raw:', proyectoSeleccionado.divisiones_derechas);
+      console.log('Es array izquierdas?', Array.isArray(proyectoSeleccionado.divisiones_izquierdas));
+      console.log('Es array derechas?', Array.isArray(proyectoSeleccionado.divisiones_derechas));
+      console.groupEnd();
+    }
+  }, [proyectoSeleccionado]);
 
   // ✅ NUEVO: Información adicional del proyecto
   const informacionProyecto = proyectoSeleccionado ? {
@@ -55,8 +69,8 @@ export const useProyecto = () => {
     // Datos calculados si están disponibles
     totalEstaciones: proyectoSeleccionado.total_estaciones,
     longitudProyecto: proyectoSeleccionado.longitud_proyecto,
-    divisionesIzquierdas: proyectoSeleccionado.divisiones_izquierdas || [-12.21, -10.7, -9, -6, -3, -1.3, 0],
-    divisionesDerechas: proyectoSeleccionado.divisiones_derechas || [1.3, 3, 6, 9, 10.7, 12.21]
+    divisionesIzquierdas: proyectoSeleccionado.divisiones_izquierdas ?? [],
+    divisionesDerechas: proyectoSeleccionado.divisiones_derechas ?? []
   } : null;
 
   // ✅ NUEVO: Cálculos derivados
