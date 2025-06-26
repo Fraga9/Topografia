@@ -87,60 +87,11 @@ const Campo = () => {
         return Math.abs(kmEstacion - kmMedicion) < 0.001; // Tolerancia para decimales
       });
       
-      console.log('Buscando medición para estación:', {
-        estacionKm: estacionSeleccionada.km,
-        medicionesDisponibles: mediciones.map(m => ({ id: m.id, km: m.estacion_km })),
-        medicionEncontrada: medicion
-      });
       
       setMedicionActiva(medicion || null);
     }
   }, [estacionSeleccionada, mediciones]);
 
-  // ✅ MEJORADO: Debug de datos recibidos
-  React.useEffect(() => {
-    console.group('Debug Campo - Datos del Backend');
-    console.log('Proyecto:', { id: proyecto?.id, nombre: proyecto?.nombre });
-    console.log('Estaciones:', { 
-      cantidad: estaciones.length, 
-      loading: loadingEstaciones,
-      error: errorEstaciones?.message,
-      muestra: estaciones[0] 
-    });
-    console.log('Mediciones:', { 
-      cantidad: mediciones.length,
-      loading: loadingMediciones, 
-      error: errorMediciones?.message,
-      muestra: mediciones[0]
-    });
-    console.log('Medición Activa:', medicionActiva);
-    console.log('Lecturas:', {
-      cantidad: lecturas.length,
-      loading: loadingLecturas,
-      error: errorLecturas?.message,
-      estructura: lecturas[0] ? Object.keys(lecturas[0]) : [],
-      muestra: lecturas[0]
-    });
-    console.log('Configuración:', {
-      informacionProyecto,
-      divisiones: divisiones.length ? divisiones : 'No configuradas'
-    });
-    
-    // Debug específico de lecturas si hay datos
-    if (lecturas.length > 0) {
-      console.log('Análisis de lecturas:');
-      lecturas.forEach(lectura => {
-        console.log(`  División: ${lectura.division_transversal}m, Lectura: ${lectura.lectura_mira}m, Clasificación: ${lectura.clasificacion || 'Sin clasificar'}`);
-      });
-    }
-    
-    console.groupEnd();
-  }, [
-    proyecto?.id, estaciones, mediciones, medicionActiva, lecturas, 
-    loadingEstaciones, loadingMediciones, loadingLecturas,
-    errorEstaciones, errorMediciones, errorLecturas,
-    divisiones, informacionProyecto
-  ]);
 
   // ✅ CORREGIDO: Crear nueva medición
   const handleCrearMedicion = async () => {
@@ -159,9 +110,7 @@ const Campo = () => {
         fecha_medicion: new Date().toISOString().split('T')[0]
       };
 
-      console.log('Creando medición:', nuevaMedicion);
       const resultado = await createMedicion.mutateAsync(nuevaMedicion);
-      console.log('Medición creada:', resultado);
       
       setMedicionActiva(resultado);
       
@@ -179,11 +128,6 @@ const Campo = () => {
     if (!medicionActiva || !valor) return;
 
     try {
-      console.log('Guardando lectura:', { 
-        medicion_id: medicionActiva.id, 
-        division_transversal: division, 
-        lectura_mira: valor 
-      });
 
       const nuevaLectura = {
         medicion_id: medicionActiva.id,
@@ -192,7 +136,6 @@ const Campo = () => {
       };
 
       const resultado = await createLectura.mutateAsync(nuevaLectura);
-      console.log('Lectura guardada:', resultado);
       
       // Refrescar lecturas para mostrar la nueva
       setTimeout(() => {
@@ -231,19 +174,6 @@ const Campo = () => {
     
     const resultado = lectura?.lectura_mira || '';
     
-    // Debug para diagnosticar (solo para división 1.3)
-    if (division === 1.3 && import.meta.env.DEV) {
-      console.log(`getLectura Debug para división ${division}:`, {
-        division,
-        lecturas: lecturas.map(l => ({ 
-          id: l.id, 
-          division: l.division_transversal, 
-          lectura: l.lectura_mira 
-        })),
-        lecturaEncontrada: lectura,
-        resultado
-      });
-    }
     
     return resultado;
   };
@@ -252,16 +182,55 @@ const Campo = () => {
   const datosGrafica = React.useMemo(() => {
     if (!lecturas.length) return [];
     
-    return lecturas.map(lectura => ({
-      division: parseFloat(lectura.division_transversal),
-      elevacionReal: lectura.elv_base_real ? parseFloat(lectura.elv_base_real) : null,
-      elevacionTeorica: lectura.elv_base_proyecto ? parseFloat(lectura.elv_base_proyecto) : null,
-      elevacionConcreto: lectura.elv_concreto_proyecto ? parseFloat(lectura.elv_concreto_proyecto) : null,
-      diferencia: lectura.elv_base_real && lectura.elv_base_proyecto ? 
-        parseFloat(lectura.elv_base_real) - parseFloat(lectura.elv_base_proyecto) : 0,
-      clasificacion: lectura.clasificacion
-    })).sort((a, b) => a.division - b.division);
-  }, [lecturas]);
+    // Debug: analizar qué datos faltan
+    console.group('🔍 Debug Gráficas - Análisis de Datos');
+    console.log('Total lecturas:', lecturas.length);
+    
+    const analisis = lecturas.map(lectura => {
+      const tiene_elv_real = lectura.elv_base_real !== null && lectura.elv_base_real !== undefined;
+      const tiene_elv_proyecto = lectura.elv_base_proyecto !== null && lectura.elv_base_proyecto !== undefined;
+      const tiene_elv_concreto = lectura.elv_concreto_proyecto !== null && lectura.elv_concreto_proyecto !== undefined;
+      
+      console.log(`División ${lectura.division_transversal}:`, {
+        lectura_mira: lectura.lectura_mira,
+        elv_base_real: lectura.elv_base_real,
+        elv_base_proyecto: lectura.elv_base_proyecto,
+        elv_concreto_proyecto: lectura.elv_concreto_proyecto,
+        clasificacion: lectura.clasificacion,
+        tiene_elv_real,
+        tiene_elv_proyecto,
+        tiene_elv_concreto
+      });
+      
+      return {
+        division: parseFloat(lectura.division_transversal),
+        elevacionReal: tiene_elv_real ? parseFloat(lectura.elv_base_real) : null,
+        elevacionTeorica: tiene_elv_proyecto ? parseFloat(lectura.elv_base_proyecto) : null,
+        elevacionConcreto: tiene_elv_concreto ? parseFloat(lectura.elv_concreto_proyecto) : null,
+        diferencia: tiene_elv_real && tiene_elv_proyecto ? 
+          parseFloat(lectura.elv_base_real) - parseFloat(lectura.elv_base_proyecto) : 0,
+        clasificacion: lectura.clasificacion,
+        datosCompletos: tiene_elv_real && tiene_elv_proyecto
+      };
+    });
+    
+    const lecturasCompletas = analisis.filter(d => d.datosCompletos).length;
+    console.log(`📊 Lecturas con datos completos: ${lecturasCompletas} de ${lecturas.length}`);
+    
+    if (lecturasCompletas === 0) {
+      console.error('❌ PROBLEMA: No hay lecturas con elv_base_proyecto calculado');
+      console.log('💡 CAUSA PROBABLE: Falta estación teórica para KM', estacionSeleccionada?.km);
+      console.log('💡 SOLUCIÓN: Verificar que existe registro en estaciones_teoricas con:');
+      console.log('   - proyecto_id:', proyecto?.id);
+      console.log('   - km:', estacionSeleccionada?.km);
+      console.log('   - pendiente_derecha: (valor diferente de 0)');
+      console.log('   - base_cl: (elevación base)');
+    }
+    
+    console.groupEnd();
+    
+    return analisis.sort((a, b) => a.division - b.division);
+  }, [lecturas, estacionSeleccionada?.km, proyecto?.id]);
 
   // ✅ CORREGIDO: Renderizar gráfica simple
   const renderGrafica = () => {
@@ -285,14 +254,39 @@ const Campo = () => {
     );
 
     if (!datosValidos.length) {
+      const tieneElevacionReal = datosGrafica.some(d => d.elevacionReal !== null);
+      const tieneElevacionTeorica = datosGrafica.some(d => d.elevacionTeorica !== null);
+      
       return (
         <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-6">
           <h3 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
           <div className="text-center py-6 lg:py-8">
-            <p className="text-gray-500 text-sm lg:text-base">Datos de elevación incompletos</p>
-            <p className="text-xs lg:text-sm text-gray-400 mt-2">
-              Las elevaciones se calculan automáticamente al guardar lecturas con un Banco de Nivel configurado.
-            </p>
+            <div className="text-red-500 mb-4">
+              <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <p className="text-gray-700 text-sm lg:text-base font-medium mb-2">Datos de elevación incompletos</p>
+            
+            <div className="text-xs lg:text-sm text-gray-500 space-y-1">
+              <p>Estado de los datos:</p>
+              <p>• Elevaciones reales: {tieneElevacionReal ? '✅ Calculadas' : '❌ Faltantes'}</p>
+              <p>• Elevaciones teóricas: {tieneElevacionTeorica ? '✅ Calculadas' : '❌ Faltantes'}</p>
+              
+              {!tieneElevacionTeorica && (
+                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded text-left">
+                  <p className="font-medium text-orange-800 mb-2">🔧 Solución requerida:</p>
+                  <p className="text-orange-700 text-xs">
+                    Falta configurar la estación teórica para KM {formatearKM(estacionSeleccionada?.km)}
+                    <br />En Supabase, tabla "estaciones_teoricas":
+                    <br />• proyecto_id: {proyecto?.id}
+                    <br />• km: {estacionSeleccionada?.km}
+                    <br />• pendiente_derecha: (ej: -0.045)
+                    <br />• base_cl: (ej: 1886.14)
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -779,25 +773,6 @@ const Campo = () => {
                 ></div>
               </div>
               
-              {/* Debug info en desarrollo */}
-              {import.meta.env.DEV && (
-                <details className="mt-2">
-                  <summary className="text-xs text-gray-500 cursor-pointer">Debug Info</summary>
-                  <div className="mt-2 text-xs text-gray-600 bg-white p-2 rounded border">
-                    <div><strong>Medición ID:</strong> {medicionActiva?.id}</div>
-                    <div><strong>Loading:</strong> {String(loadingLecturas)}</div>
-                    <div><strong>Error:</strong> {errorLecturas?.message || 'Ninguno'}</div>
-                    <div><strong>Lecturas en estado:</strong> {lecturas.length}</div>
-                    <div><strong>Divisiones esperadas:</strong> {JSON.stringify(divisiones)}</div>
-                    {lecturas.length > 0 && (
-                      <>
-                        <div><strong>Divisiones en lecturas:</strong> {JSON.stringify(lecturas.map(l => l.division_transversal))}</div>
-                        <div><strong>Clasificaciones:</strong> {JSON.stringify(lecturas.map(l => l.clasificacion))}</div>
-                      </>
-                    )}
-                  </div>
-                </details>
-              )}
             </div>
           )}
         </div>

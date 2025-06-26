@@ -17,8 +17,8 @@ class LecturaDivisionBase(BaseModel):
 
     @validator('calidad')
     def validate_calidad(cls, v):
-        if v and v not in ['BUENA', 'REGULAR', 'MALA']:
-            raise ValueError('La calidad debe ser BUENA, REGULAR o MALA')
+        if v and v not in ['BUENA', 'REGULAR', 'MALA', 'REVISAR', 'EXCELENTE']:
+            raise ValueError('La calidad debe ser BUENA, REGULAR, MALA, REVISAR o EXCELENTE')
         return v
 
 # Schema para crear lectura

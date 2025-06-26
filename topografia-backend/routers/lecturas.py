@@ -50,7 +50,7 @@ def verify_medicion_access(
     
     return medicion
 
-@router.get("/", response_model=List[schemas.LecturaDivisionSimple])
+@router.get("/", response_model=List[schemas.LecturaDivisionResponse])
 def get_lecturas(
     medicion_id: int = None,
     skip: int = 0,
