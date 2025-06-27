@@ -13,7 +13,7 @@ import { CACHE_TIMES, CALIDADES_LECTURA } from '../../utils/constants';
  */
 export const useLecturas = (medicionId, filters = {}) => {
   return useQuery({
-    queryKey: queryKeys.lectura.list(medicionId, filters),
+    queryKey: queryKeys.lectura.listByMedicion(medicionId, filters),
     
     queryFn: async () => {
       const baseUrl = endpoints.lecturas.getByMedicion(medicionId);
@@ -100,7 +100,7 @@ export const useCreateLectura = () => {
       // Invalidar lecturas de la medición
       if (data.medicion_id) {
         queryClient.invalidateQueries({ 
-          queryKey: queryKeys.lectura.byMedicion(data.medicion_id) 
+          queryKey: queryKeys.lectura.listByMedicion(data.medicion_id) 
         });
       }
       
@@ -141,7 +141,7 @@ export const useCreateLecturasLote = () => {
     onSuccess: (data, { medicionId }) => {
       // Invalidar todas las lecturas relacionadas
       queryClient.invalidateQueries({ 
-        queryKey: queryKeys.lectura.byMedicion(medicionId) 
+        queryKey: queryKeys.lectura.listByMedicion(medicionId) 
       });
       
       // Obtener información de la medición para invalidar estación
@@ -209,7 +209,7 @@ export const useUpdateLectura = () => {
       // Invalidar listas relacionadas
       if (data?.medicion_id) {
         queryClient.invalidateQueries({ 
-          queryKey: queryKeys.lectura.byMedicion(data.medicion_id) 
+          queryKey: queryKeys.lectura.listByMedicion(data.medicion_id) 
         });
       }
     }
@@ -240,7 +240,7 @@ export const useDeleteLectura = () => {
       // Invalidar listas relevantes
       if (context?.lectura?.medicion_id) {
         queryClient.invalidateQueries({ 
-          queryKey: queryKeys.lectura.byMedicion(context.lectura.medicion_id) 
+          queryKey: queryKeys.lectura.listByMedicion(context.lectura.medicion_id) 
         });
       }
       
@@ -296,7 +296,7 @@ export const useCalcularElevaciones = () => {
     onSuccess: (data, { medicionId }) => {
       // Invalidar lecturas de la medición para reflejar las nuevas elevaciones
       queryClient.invalidateQueries({ 
-        queryKey: queryKeys.lectura.byMedicion(medicionId) 
+        queryKey: queryKeys.lectura.listByMedicion(medicionId) 
       });
       
       console.log(`Elevaciones calculadas para ${data.lecturas_actualizadas} lecturas`);
@@ -432,7 +432,7 @@ export const useImportarLecturas = () => {
     onSuccess: (data, { medicionId }) => {
       // Invalidar todas las lecturas de la medición
       queryClient.invalidateQueries({ 
-        queryKey: queryKeys.lectura.byMedicion(medicionId) 
+        queryKey: queryKeys.lectura.listByMedicion(medicionId) 
       });
       
       console.log(`${data.imported_count} lecturas importadas exitosamente`);

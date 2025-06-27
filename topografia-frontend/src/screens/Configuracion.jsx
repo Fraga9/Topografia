@@ -1,640 +1,545 @@
-import React, { useState } from 'react';
-import { useAuth, usePerfilUsuario, useUpdatePerfil, useCambiarPassword } from '../hooks';
-import { Save, Download, Upload, User, Settings as SettingsIcon, Lock, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useProyecto } from '../hooks/useProyecto';
+import { useUpdateProyecto } from '../hooks/proyectos/useProyectos';
+import { formatNumber } from '../utils/formatters';
 
-const Configuracion = ({ proyectoSeleccionado }) => {
-  const [seccionActiva, setSeccionActiva] = useState('proyecto');
-  const [mostrarCambioPassword, setMostrarCambioPassword] = useState(false);
+const Configuracion = () => {
+  const [guardando, setGuardando] = useState(false);
+  const [cambiosPendientes, setCambiosPendientes] = useState(false);
 
-  const { usuario } = useAuth();
-  const { data: perfilUsuario, isLoading: loadingPerfil } = usePerfilUsuario();
-  const updatePerfil = useUpdatePerfil();
-  const cambiarPassword = useCambiarPassword();
+  // Hook para proyecto actual
+  const { proyecto, tieneProyecto } = useProyecto();
 
-  const [perfilForm, setPerfilForm] = useState({
-    nombre: perfilUsuario?.nombre || '',
-    email: perfilUsuario?.email || '',
-    telefono: perfilUsuario?.telefono || '',
-    empresa: perfilUsuario?.empresa || '',
-    cargo: perfilUsuario?.cargo || ''
+  // Hook para actualizar proyecto
+  const updateProyecto = useUpdateProyecto();
+
+  // Estados para los valores del formulario
+  const [configuracion, setConfiguracion] = useState({
+    nombre: '',
+    tramo: '',
+    cuerpo: '',
+    km_inicial: '',
+    km_final: '',
+    intervalo: '',
+    espesor: '',
+    tolerancia_sct: '',
+    divisiones_izquierdas: [],
+    divisiones_derechas: []
   });
 
-  const [passwordForm, setPasswordForm] = useState({
-    passwordActual: '',
-    passwordNuevo: '',
-    confirmarPassword: ''
+  // Estados para campos calculados (solo lectura)
+  const [calculados, setCalculados] = useState({
+    total_estaciones: 0,
+    longitud_proyecto: 0
   });
 
-  // Configuración del proyecto (valores por defecto basados en el esquema)
-  const [configProyecto, setConfigProyecto] = useState({
-    nombre: proyectoSeleccionado?.nombre || "San Miguel Allende - Dolores Hidalgo",
-    tramo: proyectoSeleccionado?.tramo || "Frente 3",
-    cuerpo: proyectoSeleccionado?.cuerpo || "A",
-    km_inicial: proyectoSeleccionado ? `${Math.floor(proyectoSeleccionado.km_inicial/1000)}+${String(proyectoSeleccionado.km_inicial%1000).padStart(3,'0')}` : "78+000",
-    km_final: proyectoSeleccionado ? `${Math.floor(proyectoSeleccionado.km_final/1000)}+${String(proyectoSeleccionado.km_final%1000).padStart(3,'0')}` : "79+000",
-    intervalo: proyectoSeleccionado?.intervalo?.toString() || "5",
-    espesor: proyectoSeleccionado?.espesor?.toString() || "0.25",
-    tolerancia_sct: proyectoSeleccionado?.tolerancia_sct?.toString() || "0.005",
-    // Parámetros de medición (mock)
-    altura_aparato: "3.289",
-    bn_referencia: "1883.021",
-    pendiente_transversal: "-0.045",
-    ingeniero: "Ing. Carlos Mendoza",
-    fecha_inicio: "2024-01-15",
-  });
-
-  // Divisiones transversales (basadas en el esquema SQL)
-  const distancias = [
-    { id: "eje", label: "EJE CENTRAL", value: "0", readonly: true },
-    { id: "d1", label: "DERECHA +1.3m", value: "1.3", readonly: false },
-    { id: "d2", label: "DERECHA +3.0m", value: "3.0", readonly: false },
-    { id: "d3", label: "DERECHA +6.0m", value: "6.0", readonly: false },
-    { id: "d4", label: "DERECHA +9.0m", value: "9.0", readonly: false },
-    { id: "d5", label: "DERECHA +10.7m", value: "10.7", readonly: false },
-    { id: "d6", label: "DERECHA +12.21m", value: "12.21", readonly: false },
-  ];
-
-  React.useEffect(() => {
-    if (perfilUsuario) {
-      setPerfilForm({
-        nombre: perfilUsuario.nombre || '',
-        email: perfilUsuario.email || '',
-        telefono: perfilUsuario.telefono || '',
-        empresa: perfilUsuario.empresa || '',
-        cargo: perfilUsuario.cargo || ''
+  // Cargar valores del proyecto al estado del formulario
+  useEffect(() => {
+    if (proyecto) {
+      setConfiguracion({
+        nombre: proyecto.nombre || '',
+        tramo: proyecto.tramo || '',
+        cuerpo: proyecto.cuerpo || '',
+        km_inicial: proyecto.km_inicial || '',
+        km_final: proyecto.km_final || '',
+        intervalo: proyecto.intervalo || '',
+        espesor: proyecto.espesor || '',
+        tolerancia_sct: proyecto.tolerancia_sct || '',
+        divisiones_izquierdas: proyecto.divisiones_izquierdas || [],
+        divisiones_derechas: proyecto.divisiones_derechas || []
       });
+      setCambiosPendientes(false);
     }
-  }, [perfilUsuario]);
+  }, [proyecto]);
 
-  // Actualizar configuración cuando cambie el proyecto seleccionado
-  React.useEffect(() => {
-    if (proyectoSeleccionado) {
-      setConfigProyecto({
-        nombre: proyectoSeleccionado.nombre || "",
-        tramo: proyectoSeleccionado.tramo || "",
-        cuerpo: proyectoSeleccionado.cuerpo || "A",
-        km_inicial: `${Math.floor(proyectoSeleccionado.km_inicial/1000)}+${String(proyectoSeleccionado.km_inicial%1000).padStart(3,'0')}`,
-        km_final: `${Math.floor(proyectoSeleccionado.km_final/1000)}+${String(proyectoSeleccionado.km_final%1000).padStart(3,'0')}`,
-        intervalo: proyectoSeleccionado.intervalo?.toString() || "5",
-        espesor: proyectoSeleccionado.espesor?.toString() || "0.25",
-        tolerancia_sct: proyectoSeleccionado.tolerancia_sct?.toString() || "0.005",
-        altura_aparato: "3.289",
-        bn_referencia: "1883.021",
-        pendiente_transversal: "-0.045",
-        ingeniero: "Ing. Carlos Mendoza",
-        fecha_inicio: proyectoSeleccionado.fecha_creacion?.split('T')[0] || "2024-01-15",
-      });
-    }
-  }, [proyectoSeleccionado]);
+  // Recalcular campos automáticos cuando cambien los valores relevantes
+  useEffect(() => {
+    if (configuracion.km_inicial && configuracion.km_final && configuracion.intervalo) {
+      const kmInicial = parseFloat(configuracion.km_inicial);
+      const kmFinal = parseFloat(configuracion.km_final);
+      const intervalo = parseFloat(configuracion.intervalo);
 
-  const handleUpdatePerfil = async (e) => {
-    e.preventDefault();
-    try {
-      await updatePerfil.mutateAsync(perfilForm);
-      alert('Perfil actualizado exitosamente');
-    } catch (error) {
-      console.error('Error actualizando perfil:', error);
-      alert('Error al actualizar el perfil');
+      if (!isNaN(kmInicial) && !isNaN(kmFinal) && !isNaN(intervalo) && intervalo > 0) {
+        const longitud = kmFinal - kmInicial;
+        const totalEstaciones = Math.ceil(longitud / intervalo) + 1; // +1 para incluir la estación inicial
+
+        setCalculados({
+          total_estaciones: totalEstaciones,
+          longitud_proyecto: longitud
+        });
+      }
     }
+  }, [configuracion.km_inicial, configuracion.km_final, configuracion.intervalo]);
+
+  // Detectar cambios en el formulario
+  useEffect(() => {
+    if (proyecto) {
+      const hayDiferencias = 
+        configuracion.nombre !== (proyecto.nombre || '') ||
+        configuracion.tramo !== (proyecto.tramo || '') ||
+        configuracion.cuerpo !== (proyecto.cuerpo || '') ||
+        parseFloat(configuracion.km_inicial) !== proyecto.km_inicial ||
+        parseFloat(configuracion.km_final) !== proyecto.km_final ||
+        parseFloat(configuracion.intervalo) !== proyecto.intervalo ||
+        parseFloat(configuracion.espesor) !== proyecto.espesor ||
+        parseFloat(configuracion.tolerancia_sct) !== proyecto.tolerancia_sct ||
+        JSON.stringify(configuracion.divisiones_izquierdas) !== JSON.stringify(proyecto.divisiones_izquierdas) ||
+        JSON.stringify(configuracion.divisiones_derechas) !== JSON.stringify(proyecto.divisiones_derechas);
+
+      setCambiosPendientes(hayDiferencias);
+    }
+  }, [configuracion, proyecto]);
+
+  // Manejar cambios en inputs
+  const handleInputChange = (campo, valor) => {
+    setConfiguracion(prev => ({
+      ...prev,
+      [campo]: valor
+    }));
   };
 
-  const handleCambiarPassword = async (e) => {
-    e.preventDefault();
-    
-    if (passwordForm.passwordNuevo !== passwordForm.confirmarPassword) {
-      alert('Las contraseñas nuevas no coinciden');
-      return;
-    }
-
-    try {
-      await cambiarPassword.mutateAsync({
-        passwordActual: passwordForm.passwordActual,
-        passwordNuevo: passwordForm.passwordNuevo
-      });
+  // Agregar división
+  const agregarDivision = (lado) => {
+    const valor = prompt(`Ingrese la nueva división ${lado} (en metros):`);
+    if (valor !== null && !isNaN(parseFloat(valor))) {
+      const nuevasDivisiones = [...configuracion[`divisiones_${lado}`], parseFloat(valor)];
+      nuevasDivisiones.sort((a, b) => lado === 'izquierdas' ? b - a : a - b); // Ordenar
       
-      setPasswordForm({
-        passwordActual: '',
-        passwordNuevo: '',
-        confirmarPassword: ''
-      });
-      setMostrarCambioPassword(false);
-      alert('Contraseña cambiada exitosamente');
-    } catch (error) {
-      console.error('Error cambiando contraseña:', error);
-      alert('Error al cambiar la contraseña');
+      handleInputChange(`divisiones_${lado}`, nuevasDivisiones);
     }
   };
 
-  const handleSaveConfigProject = () => {
-    // Aquí se conectaría con la API para actualizar el proyecto
-    alert('Configuración del proyecto guardada (pendiente implementar API)');
+  // Eliminar división
+  const eliminarDivision = (lado, index) => {
+    const nuevasDivisiones = configuracion[`divisiones_${lado}`].filter((_, i) => i !== index);
+    handleInputChange(`divisiones_${lado}`, nuevasDivisiones);
   };
 
-  const renderConfiguracionProyecto = () => (
-    <div className="space-y-6">
-      {proyectoSeleccionado ? (
-        <>
-          {/* Project Information */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Información del Proyecto</h3>
+  // Editar división
+  const editarDivision = (lado, index, valorActual) => {
+    const nuevoValor = prompt(`Editar división ${lado}:`, valorActual);
+    if (nuevoValor !== null && !isNaN(parseFloat(nuevoValor))) {
+      const nuevasDivisiones = [...configuracion[`divisiones_${lado}`]];
+      nuevasDivisiones[index] = parseFloat(nuevoValor);
+      nuevasDivisiones.sort((a, b) => lado === 'izquierdas' ? b - a : a - b); // Reordenar
+      
+      handleInputChange(`divisiones_${lado}`, nuevasDivisiones);
+    }
+  };
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Proyecto</label>
-                <input
-                  type="text"
-                  value={configProyecto.nombre}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, nombre: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+  // Guardar cambios
+  const handleGuardar = async () => {
+    if (!proyecto || !cambiosPendientes) return;
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tramo</label>
-                  <input
-                    type="text"
-                    value={configProyecto.tramo}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, tramo: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+    setGuardando(true);
+    try {
+      const datosActualizados = {
+        nombre: configuracion.nombre,
+        tramo: configuracion.tramo,
+        cuerpo: configuracion.cuerpo,
+        km_inicial: parseFloat(configuracion.km_inicial),
+        km_final: parseFloat(configuracion.km_final),
+        intervalo: parseFloat(configuracion.intervalo),
+        espesor: parseFloat(configuracion.espesor),
+        tolerancia_sct: parseFloat(configuracion.tolerancia_sct),
+        divisiones_izquierdas: configuracion.divisiones_izquierdas,
+        divisiones_derechas: configuracion.divisiones_derechas
+      };
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cuerpo</label>
-                  <input
-                    type="text"
-                    value={configProyecto.cuerpo}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, cuerpo: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+      await updateProyecto.mutateAsync({
+        proyectoId: proyecto.id,
+        datosActualizados
+      });
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">KM Inicial</label>
-                  <input
-                    type="text"
-                    value={configProyecto.km_inicial}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, km_inicial: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+      setCambiosPendientes(false);
+      alert('Configuración guardada exitosamente');
+    } catch (error) {
+      console.error('Error guardando configuración:', error);
+      alert('Error al guardar configuración: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setGuardando(false);
+    }
+  };
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">KM Final</label>
-                  <input
-                    type="text"
-                    value={configProyecto.km_final}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, km_final: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+  // Restaurar valores originales
+  const handleRestaurar = () => {
+    if (confirm('¿Descartar todos los cambios y restaurar valores originales?')) {
+      if (proyecto) {
+        setConfiguracion({
+          nombre: proyecto.nombre || '',
+          tramo: proyecto.tramo || '',
+          cuerpo: proyecto.cuerpo || '',
+          km_inicial: proyecto.km_inicial || '',
+          km_final: proyecto.km_final || '',
+          intervalo: proyecto.intervalo || '',
+          espesor: proyecto.espesor || '',
+          tolerancia_sct: proyecto.tolerancia_sct || '',
+          divisiones_izquierdas: proyecto.divisiones_izquierdas || [],
+          divisiones_derechas: proyecto.divisiones_derechas || []
+        });
+      }
+    }
+  };
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ingeniero Responsable</label>
-                  <input
-                    type="text"
-                    value={configProyecto.ingeniero}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, ingeniero: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+  // Formatear KM para mostrar
+  const formatearKM = (km) => {
+    if (!km) return '';
+    const kmNum = parseFloat(km);
+    const kmMiles = Math.floor(kmNum / 1000);
+    const metros = kmNum % 1000;
+    return `${kmMiles}+${metros.toFixed(0).padStart(3, '0')}`;
+  };
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-                  <input
-                    type="date"
-                    value={configProyecto.fecha_inicio}
-                    onChange={(e) => setConfigProyecto({ ...configProyecto, fecha_inicio: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Technical Parameters */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Parámetros Técnicos</h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Intervalo de Medición (metros)</label>
-                <input
-                  type="number"
-                  step="1"
-                  value={configProyecto.intervalo}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, intervalo: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Espesor de Concreto (metros)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={configProyecto.espesor}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, espesor: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tolerancia SCT (metros)</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={configProyecto.tolerancia_sct}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, tolerancia_sct: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Estándar: ±0.005m (±5mm)</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Altura de Aparato (metros)</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={configProyecto.altura_aparato}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, altura_aparato: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">BN Referencia (metros)</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={configProyecto.bn_referencia}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, bn_referencia: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pendiente Transversal (%)</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={configProyecto.pendiente_transversal}
-                  onChange={(e) => setConfigProyecto({ ...configProyecto, pendiente_transversal: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Bombeo del pavimento</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Cross Section Configuration */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Configuración de Sección Transversal</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Distancias de medición desde el eje central (solo derechas - sección simétrica)
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {distancias.map((dist) => (
-                <div key={dist.id}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dist.label}</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={dist.value}
-                    readOnly={dist.readonly}
-                    className={`w-full border border-gray-300 rounded px-3 py-2 ${
-                      dist.readonly ? "bg-gray-100 text-gray-500" : "focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-4">
-            <button 
-              onClick={handleSaveConfigProject}
-              className="bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center space-x-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>GUARDAR CONFIGURACIÓN</span>
-            </button>
-
-            <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2">
-              <Download className="w-4 h-4" />
-              <span>EXPORTAR CONFIG</span>
-            </button>
-
-            <button className="bg-gray-100 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center space-x-2">
-              <Upload className="w-4 h-4" />
-              <span>IMPORTAR CONFIG</span>
-            </button>
-
-            <button className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors">
-              RESTABLECER VALORES
-            </button>
-          </div>
-
-          {/* Configuration Summary */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="font-semibold text-gray-900 mb-2">Resumen de Configuración:</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Total estaciones:</span>
-                <span className="font-medium ml-2">
-                  {Math.ceil((parseFloat(configProyecto.km_final.replace('+', '')) - parseFloat(configProyecto.km_inicial.replace('+', ''))) / parseFloat(configProyecto.intervalo))} estaciones
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-600">Puntos por estación:</span>
-                <span className="font-medium ml-2">7 puntos</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Total mediciones:</span>
-                <span className="font-medium ml-2">
-                  {Math.ceil((parseFloat(configProyecto.km_final.replace('+', '')) - parseFloat(configProyecto.km_inicial.replace('+', ''))) / parseFloat(configProyecto.intervalo)) * 7} puntos
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
+  // Si no hay proyecto seleccionado
+  if (!tieneProyecto) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
         <div className="text-center py-12">
           <div className="text-gray-400 mb-4">
-            <SettingsIcon className="mx-auto h-16 w-16" />
+            <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay proyecto seleccionado</h3>
-          <p className="text-gray-600">Selecciona un proyecto para configurar sus parámetros.</p>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderPerfil = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Información Personal
-        </h3>
-        
-        {loadingPerfil ? (
-          <div className="animate-pulse space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        ) : (
-          <form onSubmit={handleUpdatePerfil} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nombre completo
-                </label>
-                <input
-                  type="text"
-                  value={perfilForm.nombre}
-                  onChange={(e) => setPerfilForm({...perfilForm, nombre: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={perfilForm.email}
-                  onChange={(e) => setPerfilForm({...perfilForm, email: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Teléfono
-                </label>
-                <input
-                  type="tel"
-                  value={perfilForm.telefono}
-                  onChange={(e) => setPerfilForm({...perfilForm, telefono: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Empresa
-                </label>
-                <input
-                  type="text"
-                  value={perfilForm.empresa}
-                  onChange={(e) => setPerfilForm({...perfilForm, empresa: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Cargo
-                </label>
-                <input
-                  type="text"
-                  value={perfilForm.cargo}
-                  onChange={(e) => setPerfilForm({...perfilForm, cargo: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={updatePerfil.isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {updatePerfil.isLoading ? 'Actualizando...' : 'Actualizar Perfil'}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* Seguridad */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Seguridad
-        </h3>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="font-medium text-gray-900">Contraseña</h4>
-              <p className="text-sm text-gray-600">Cambia tu contraseña regularmente para mayor seguridad</p>
-            </div>
-            <button
-              onClick={() => setMostrarCambioPassword(true)}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Cambiar contraseña
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Seleccione un Proyecto</h2>
+          <p className="text-gray-600 mb-4">
+            Para configurar parámetros, primero seleccione un proyecto.
+          </p>
+          <button 
+            onClick={() => window.location.href = '/proyectos'}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-lg"
+          >
+            Ir a Proyectos
+          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Configuración</h1>
-        <p className="text-gray-600 mt-1">
-          {proyectoSeleccionado 
-            ? `Gestiona la configuración del proyecto: ${proyectoSeleccionado.nombre}`
-            : 'Gestiona tu perfil y configuración del sistema'
-          }
-        </p>
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Configuración del Proyecto</h1>
+            <p className="text-gray-600 mt-1">
+              Modifica los parámetros y configuración del proyecto
+            </p>
+          </div>
+          
+          <div className="text-right">
+            <h3 className="font-medium text-gray-900">{proyecto.nombre}</h3>
+            <p className="text-sm text-gray-500">ID: {proyecto.id}</p>
+            {cambiosPendientes && (
+              <p className="text-xs text-orange-600 font-medium">● Cambios sin guardar</p>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Navegación lateral */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <nav className="space-y-1">
-            {[
-              { id: 'proyecto', label: 'Proyecto', icon: SettingsIcon },
-              { id: 'perfil', label: 'Perfil', icon: User },
-              { id: 'seguridad', label: 'Seguridad', icon: Lock },
-              { id: 'ayuda', label: 'Ayuda', icon: HelpCircle }
-            ].map((seccion) => {
-              const IconComponent = seccion.icon;
-              return (
-                <button
-                  key={seccion.id}
-                  onClick={() => setSeccionActiva(seccion.id)}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center ${
-                    seccionActiva === seccion.id
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <IconComponent className="mr-3 w-4 h-4" />
-                  {seccion.label}
-                </button>
-              );
-            })}
-          </nav>
+      {/* Botones de acción */}
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={handleRestaurar}
+          disabled={!cambiosPendientes}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Restaurar
+        </button>
+        <button
+          onClick={handleGuardar}
+          disabled={!cambiosPendientes || guardando}
+          className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {guardando ? 'Guardando...' : 'Guardar Cambios'}
+        </button>
+      </div>
+
+      {/* Información Básica del Proyecto */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Básica</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del Proyecto
+            </label>
+            <input
+              type="text"
+              value={configuracion.nombre}
+              onChange={(e) => handleInputChange('nombre', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Nombre del proyecto"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tramo
+            </label>
+            <input
+              type="text"
+              value={configuracion.tramo}
+              onChange={(e) => handleInputChange('tramo', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Descripción del tramo"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cuerpo
+            </label>
+            <select
+              value={configuracion.cuerpo}
+              onChange={(e) => handleInputChange('cuerpo', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="A">Cuerpo A</option>
+              <option value="B">Cuerpo B</option>
+              <option value="C">Cuerpo C</option>
+              <option value="D">Cuerpo D</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Parámetros Geométricos */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Parámetros Geométricos</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              KM Inicial (m)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              value={configuracion.km_inicial}
+              onChange={(e) => handleInputChange('km_inicial', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="15000.000"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Formato: {formatearKM(configuracion.km_inicial)}
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              KM Final (m)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              value={configuracion.km_final}
+              onChange={(e) => handleInputChange('km_final', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="18500.000"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Formato: {formatearKM(configuracion.km_final)}
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Intervalo (m)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={configuracion.intervalo}
+              onChange={(e) => handleInputChange('intervalo', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="5.0"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Distancia entre estaciones
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Espesor (m)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              value={configuracion.espesor}
+              onChange={(e) => handleInputChange('espesor', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.250"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Espesor de carpeta asfáltica
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tolerancia SCT (m)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              value={configuracion.tolerancia_sct}
+              onChange={(e) => handleInputChange('tolerancia_sct', e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.005"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Tolerancia de la SCT
+            </p>
+          </div>
         </div>
 
-        {/* Contenido principal */}
-        <div className="lg:col-span-3">
-          {seccionActiva === 'proyecto' && renderConfiguracionProyecto()}
-          {seccionActiva === 'perfil' && renderPerfil()}
-          {seccionActiva === 'seguridad' && renderPerfil()}
-          {seccionActiva === 'ayuda' && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Centro de Ayuda
-              </h3>
-              <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="font-medium text-gray-900">📖 Documentación</h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Consulta la guía completa de usuario
-                  </p>
-                </div>
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="font-medium text-gray-900">💬 Soporte</h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Contacta con nuestro equipo de soporte
-                  </p>
-                </div>
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="font-medium text-gray-900">🎥 Tutoriales</h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Videos explicativos de las funcionalidades
-                  </p>
+        {/* Valores Calculados */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">Valores Calculados Automáticamente</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-blue-700">Total de Estaciones:</span>
+              <span className="font-medium text-blue-900">{calculados.total_estaciones}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-700">Longitud del Proyecto:</span>
+              <span className="font-medium text-blue-900">{formatNumber(calculados.longitud_proyecto, 3)} m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Divisiones Transversales */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Divisiones Izquierdas */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Divisiones Izquierdas</h3>
+            <button
+              onClick={() => agregarDivision('izquierdas')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+            >
+              + Agregar
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            {configuracion.divisiones_izquierdas.map((division, index) => (
+              <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                <span className="text-sm font-medium">
+                  {formatNumber(Math.abs(division), 2)}m (I)
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => editarDivision('izquierdas', index, division)}
+                    className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => eliminarDivision('izquierdas', index)}
+                    className="text-red-600 hover:text-red-800 text-xs px-2 py-1"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal cambio de contraseña */}
-      {mostrarCambioPassword && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
-                Cambiar Contraseña
-              </h3>
-            </div>
+            ))}
             
-            <form onSubmit={handleCambiarPassword} className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Contraseña actual
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.passwordActual}
-                  onChange={(e) => setPasswordForm({...passwordForm, passwordActual: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            {configuracion.divisiones_izquierdas.length === 0 && (
+              <p className="text-gray-500 text-sm text-center py-4">
+                No hay divisiones izquierdas configuradas
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Divisiones Derechas */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Divisiones Derechas</h3>
+            <button
+              onClick={() => agregarDivision('derechas')}
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+            >
+              + Agregar
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            {configuracion.divisiones_derechas.map((division, index) => (
+              <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                <span className="text-sm font-medium">
+                  {formatNumber(division, 2)}m (D)
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => editarDivision('derechas', index, division)}
+                    className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => eliminarDivision('derechas', index)}
+                    className="text-red-600 hover:text-red-800 text-xs px-2 py-1"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nueva contraseña
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.passwordNuevo}
-                  onChange={(e) => setPasswordForm({...passwordForm, passwordNuevo: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Confirmar nueva contraseña
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.confirmarPassword}
-                  onChange={(e) => setPasswordForm({...passwordForm, confirmarPassword: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setMostrarCambioPassword(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={cambiarPassword.isLoading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-                >
-                  {cambiarPassword.isLoading ? 'Cambiando...' : 'Cambiar Contraseña'}
-                </button>
-              </div>
-            </form>
+            ))}
+            
+            {configuracion.divisiones_derechas.length === 0 && (
+              <p className="text-gray-500 text-sm text-center py-4">
+                No hay divisiones derechas configuradas
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Vista Previa de Divisiones */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Vista Previa de Sección Transversal</h3>
+        
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="flex justify-center items-center space-x-2 text-sm">
+            {/* Divisiones izquierdas */}
+            {configuracion.divisiones_izquierdas.slice().reverse().map((div, index) => (
+              <span key={`izq-${index}`} className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                {formatNumber(Math.abs(div), 1)}
+              </span>
+            ))}
+            
+            {/* Centro */}
+            <span className="bg-yellow-200 text-yellow-800 px-3 py-1 rounded font-bold">
+              0.0 (CL)
+            </span>
+            
+            {/* Divisiones derechas */}
+            {configuracion.divisiones_derechas.map((div, index) => (
+              <span key={`der-${index}`} className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                {formatNumber(div, 1)}
+              </span>
+            ))}
+          </div>
+          
+          <p className="text-center text-xs text-gray-500 mt-2">
+            Total de divisiones: {configuracion.divisiones_izquierdas.length + configuracion.divisiones_derechas.length + 1} 
+            (incluye centro de línea)
+          </p>
+        </div>
+      </div>
+
+      {/* Indicador de cambios pendientes */}
+      {cambiosPendientes && (
+        <div className="fixed bottom-4 right-4 bg-orange-100 border border-orange-300 rounded-lg p-4 shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+            <span className="text-orange-800 font-medium">Tienes cambios sin guardar</span>
           </div>
         </div>
       )}

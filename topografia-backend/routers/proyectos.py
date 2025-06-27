@@ -42,8 +42,8 @@ def get_proyectos(
             "espesor": float(proyecto.espesor) if proyecto.espesor else 0.25,
             "tolerancia_sct": float(proyecto.tolerancia_sct) if proyecto.tolerancia_sct else 0.005,
             # ✅ CONVERSIÓN: JSONB a list
-            "divisiones_izquierdas": proyecto.divisiones_izquierdas,
-            "divisiones_derechas": proyecto.divisiones_derechas,
+            "divisiones_izquierdas": proyecto.divisiones_izquierdas or [],
+            "divisiones_derechas": proyecto.divisiones_derechas or [],
             # ✅ CAMPOS CALCULADOS
             "total_estaciones": proyecto.total_estaciones,
             "longitud_proyecto": float(proyecto.longitud_proyecto) if proyecto.longitud_proyecto else 0.0,
@@ -71,8 +71,8 @@ def get_proyecto(
         "intervalo": float(proyecto.intervalo) if proyecto.intervalo else 5.0,
         "espesor": float(proyecto.espesor) if proyecto.espesor else 0.25,
         "tolerancia_sct": float(proyecto.tolerancia_sct) if proyecto.tolerancia_sct else 0.005,
-        "divisiones_izquierdas": proyecto.divisiones_izquierdas,
-        "divisiones_derechas": proyecto.divisiones_derechas,
+        "divisiones_izquierdas": proyecto.divisiones_izquierdas or [],
+        "divisiones_derechas": proyecto.divisiones_derechas or [],
         "total_estaciones": proyecto.total_estaciones,
         "longitud_proyecto": float(proyecto.longitud_proyecto) if proyecto.longitud_proyecto else 0.0,
         "fecha_creacion": proyecto.fecha_creacion,

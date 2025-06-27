@@ -5,7 +5,7 @@ import {
   useMediciones, 
   useCreateMedicion,
 } from '../hooks';
-import { useLecturas, useCreateLectura } from '../hooks/lecturas';
+import { useLecturas, useCreateLectura, useUpdateLectura } from '../hooks/lecturas';
 import { useRealTimeProject } from '../hooks/useRealTimeProject';
 import { useRefreshProject } from '../hooks/useRefreshProject';
 
@@ -22,6 +22,9 @@ const Campo = () => {
   const [estacionActual, setEstacionActual] = useState(0);
   const [medicionActiva, setMedicionActiva] = useState(null);
   const [vistaActiva, setVistaActiva] = useState('captura'); // 'captura' o 'graficas'
+  
+  // Estado local para los valores de input (mejora la UX)
+  const [valoresLocales, setValoresLocales] = useState({});
   
   // Datos del banco de nivel para nueva medición
   const [datoBN, setDatoBN] = useState({
@@ -72,25 +75,73 @@ const Campo = () => {
   // Mutations
   const createMedicion = useCreateMedicion();
   const createLectura = useCreateLectura();
+  const updateLectura = useUpdateLectura();
 
   // Estación actual seleccionada
   const estacionSeleccionada = estaciones[estacionActual];
 
+  // ✅ CORREGIDO: Guardar valores pendientes antes de cambiar de medición
+  const guardarValoresPendientes = async () => {
+    const valoresPendientes = Object.entries(valoresLocales);
+    if (valoresPendientes.length === 0) return;
+
+    // Guardar todos los valores pendientes
+    const promesasGuardado = valoresPendientes.map(async ([clave, valor]) => {
+      const [medicionId, division] = clave.split('-');
+      if (medicionId && division && valor) {
+        try {
+          await handleGuardarLectura(parseFloat(division), valor);
+        } catch (error) {
+          console.error(`Error guardando división ${division}:`, error);
+        }
+      }
+    });
+
+    await Promise.all(promesasGuardado);
+    setValoresLocales({});
+  };
+
   // ✅ CORREGIDO: Medición activa para la estación actual
   useEffect(() => {
-    if (estacionSeleccionada && mediciones.length > 0) {
-      // Buscar medición que coincida con el KM de la estación
-      const medicion = mediciones.find(m => {
-        // Convertir ambos a número para comparación precisa
-        const kmEstacion = parseFloat(estacionSeleccionada.km);
-        const kmMedicion = parseFloat(m.estacion_km);
-        return Math.abs(kmEstacion - kmMedicion) < 0.001; // Tolerancia para decimales
-      });
+    const cambiarMedicion = async () => {
+      // Guardar valores pendientes antes de cambiar
+      await guardarValoresPendientes();
       
-      
-      setMedicionActiva(medicion || null);
-    }
+      if (estacionSeleccionada && mediciones.length > 0) {
+        // Buscar medición que coincida con el KM de la estación
+        const medicion = mediciones.find(m => {
+          // Convertir ambos a número para comparación precisa
+          const kmEstacion = parseFloat(estacionSeleccionada.km);
+          const kmMedicion = parseFloat(m.estacion_km);
+          return Math.abs(kmEstacion - kmMedicion) < 0.001; // Tolerancia para decimales
+        });
+        
+        setMedicionActiva(medicion || null);
+      }
+    };
+
+    cambiarMedicion();
   }, [estacionSeleccionada, mediciones]);
+
+  // ✅ NUEVO: Guardar valores pendientes al cambiar de vista o salir
+  useEffect(() => {
+    const handleBeforeUnload = async (e) => {
+      const valoresPendientes = Object.keys(valoresLocales).length;
+      if (valoresPendientes > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+        await guardarValoresPendientes();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Intentar guardar al desmontar el componente
+      guardarValoresPendientes();
+    };
+  }, [valoresLocales]);
 
 
   // ✅ CORREGIDO: Crear nueva medición
@@ -123,24 +174,44 @@ const Campo = () => {
     }
   };
 
-  // ✅ CORREGIDO: Guardar lectura
+  // ✅ CORREGIDO: Guardar lectura (crear o actualizar)
   const handleGuardarLectura = async (division, valor) => {
     if (!medicionActiva || !valor) return;
 
     try {
+      // Buscar si ya existe una lectura para esta división
+      const lecturaExistente = lecturas.find(l => 
+        Math.abs(parseFloat(l.division_transversal) - parseFloat(division)) < 0.01
+      );
 
-      const nuevaLectura = {
-        medicion_id: medicionActiva.id,
-        division_transversal: parseFloat(division),
-        lectura_mira: parseFloat(valor)
-      };
+      if (lecturaExistente) {
+        // Actualizar lectura existente
+        const datosActualizados = {
+          lectura_mira: parseFloat(valor)
+        };
 
-      const resultado = await createLectura.mutateAsync(nuevaLectura);
+        await updateLectura.mutateAsync({
+          lecturaId: lecturaExistente.id,
+          datosActualizados
+        });
+      } else {
+        // Crear nueva lectura
+        const nuevaLectura = {
+          medicion_id: medicionActiva.id,
+          division_transversal: parseFloat(division),
+          lectura_mira: parseFloat(valor)
+        };
+
+        await createLectura.mutateAsync(nuevaLectura);
+      }
       
-      // Refrescar lecturas para mostrar la nueva
-      setTimeout(() => {
-        refetchLecturas();
-      }, 500);
+      // Limpiar el valor local después de guardar exitosamente
+      const claveLocal = `${medicionActiva.id}-${division}`;
+      setValoresLocales(prev => {
+        const nuevos = { ...prev };
+        delete nuevos[claveLocal];
+        return nuevos;
+      });
       
     } catch (error) {
       console.error('Error guardando lectura:', error);
@@ -149,7 +220,10 @@ const Campo = () => {
   };
 
   // Navegar entre estaciones
-  const irAEstacion = (direccion) => {
+  const irAEstacion = async (direccion) => {
+    // Guardar valores pendientes antes de cambiar de estación
+    await guardarValoresPendientes();
+    
     if (direccion === 'anterior' && estacionActual > 0) {
       setEstacionActual(estacionActual - 1);
     } else if (direccion === 'siguiente' && estacionActual < estaciones.length - 1) {
@@ -165,6 +239,12 @@ const Campo = () => {
 
   // ✅ CORREGIDO: Obtener lectura para una división específica
   const getLectura = (division) => {
+    // Primero verificar si hay un valor local para esta división
+    const claveLocal = `${medicionActiva?.id}-${division}`;
+    if (valoresLocales[claveLocal] !== undefined) {
+      return valoresLocales[claveLocal];
+    }
+    
     if (!lecturas || lecturas.length === 0) return '';
     
     // Buscar la lectura exacta con tolerancia para decimales
@@ -173,7 +253,6 @@ const Campo = () => {
     );
     
     const resultado = lectura?.lectura_mira || '';
-    
     
     return resultado;
   };
@@ -518,7 +597,10 @@ const Campo = () => {
             {/* Navegación de vistas */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
-                onClick={() => setVistaActiva('captura')}
+                onClick={async () => {
+                  await guardarValoresPendientes();
+                  setVistaActiva('captura');
+                }}
                 className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
                   vistaActiva === 'captura' 
                     ? 'bg-white text-gray-900 shadow' 
@@ -528,7 +610,10 @@ const Campo = () => {
                 Captura
               </button>
               <button
-                onClick={() => setVistaActiva('graficas')}
+                onClick={async () => {
+                  await guardarValoresPendientes();
+                  setVistaActiva('graficas');
+                }}
                 className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
                   vistaActiva === 'graficas' 
                     ? 'bg-white text-gray-900 shadow' 
@@ -736,8 +821,28 @@ const Campo = () => {
                             step="0.001"
                             value={lectura}
                             onChange={(e) => {
-                              if (e.target.value && e.target.value !== lectura) {
-                                handleGuardarLectura(division, e.target.value);
+                              const nuevoValor = e.target.value;
+                              const claveLocal = `${medicionActiva.id}-${division}`;
+                              
+                              // Actualizar valor local inmediatamente para mejor UX
+                              setValoresLocales(prev => ({
+                                ...prev,
+                                [claveLocal]: nuevoValor
+                              }));
+                            }}
+                            onBlur={(e) => {
+                              const valor = e.target.value;
+                              if (valor && valor !== getLectura(division)) {
+                                handleGuardarLectura(division, valor);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const valor = e.target.value;
+                                if (valor && valor !== getLectura(division)) {
+                                  handleGuardarLectura(division, valor);
+                                }
+                                e.target.blur(); // Quitar foco para activar onBlur
                               }
                             }}
                             className={`w-full px-2 py-2 text-center border rounded text-sm lg:text-base min-w-[100px] ${
@@ -762,9 +867,16 @@ const Campo = () => {
             <div className="mt-3 lg:mt-4 p-3 lg:p-4 bg-gray-50 rounded-lg">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 space-y-1 sm:space-y-0">
                 <span className="text-xs lg:text-sm font-medium text-gray-700">Progreso de Lecturas</span>
-                <span className="text-xs lg:text-sm text-gray-500">
-                  {lecturas.length} de {divisiones.length} completadas
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs lg:text-sm text-gray-500">
+                    {lecturas.length} de {divisiones.length} completadas
+                  </span>
+                  {Object.keys(valoresLocales).length > 0 && (
+                    <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
+                      {Object.keys(valoresLocales).length} pendiente(s)
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                 <div 
@@ -782,9 +894,9 @@ const Campo = () => {
       )}
 
       {/* Estado de guardado */}
-      {createLectura.isLoading && (
+      {(createLectura.isLoading || updateLectura.isLoading) && (
         <div className="fixed bottom-3 right-3 lg:bottom-4 lg:right-4 bg-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg shadow-lg text-sm lg:text-base">
-          Guardando lectura...
+          {createLectura.isLoading ? 'Guardando nueva lectura...' : 'Actualizando lectura...'}
         </div>
       )}
       
