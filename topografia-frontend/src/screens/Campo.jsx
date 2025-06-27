@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useProyecto } from '../hooks/useProyecto';
 import { 
   useEstaciones, 
@@ -25,6 +25,9 @@ const Campo = () => {
   
   // Estado local para los valores de input (mejora la UX)
   const [valoresLocales, setValoresLocales] = useState({});
+  
+  // Estado para controlar timeouts de guardado automático
+  const [timeoutsGuardado, setTimeoutsGuardado] = useState({});
   
   // Datos del banco de nivel para nueva medición
   const [datoBN, setDatoBN] = useState({
@@ -174,36 +177,19 @@ const Campo = () => {
     }
   };
 
-  // ✅ CORREGIDO: Guardar lectura (crear o actualizar)
-  const handleGuardarLectura = async (division, valor) => {
-    if (!medicionActiva || !valor) return;
+  // ✅ SIMPLIFICADO: Usar solo CREATE que hace UPSERT automático
+  const handleGuardarLectura = useCallback(async (division, valor) => {
+    if (!medicionActiva || !valor || valor.trim() === '') return;
 
     try {
-      // Buscar si ya existe una lectura para esta división
-      const lecturaExistente = lecturas.find(l => 
-        Math.abs(parseFloat(l.division_transversal) - parseFloat(division)) < 0.01
-      );
+      // El backend ahora maneja automáticamente create vs update (UPSERT)
+      const lecturaData = {
+        medicion_id: medicionActiva.id,
+        division_transversal: parseFloat(division),
+        lectura_mira: parseFloat(valor)
+      };
 
-      if (lecturaExistente) {
-        // Actualizar lectura existente
-        const datosActualizados = {
-          lectura_mira: parseFloat(valor)
-        };
-
-        await updateLectura.mutateAsync({
-          lecturaId: lecturaExistente.id,
-          datosActualizados
-        });
-      } else {
-        // Crear nueva lectura
-        const nuevaLectura = {
-          medicion_id: medicionActiva.id,
-          division_transversal: parseFloat(division),
-          lectura_mira: parseFloat(valor)
-        };
-
-        await createLectura.mutateAsync(nuevaLectura);
-      }
+      await createLectura.mutateAsync(lecturaData);
       
       // Limpiar el valor local después de guardar exitosamente
       const claveLocal = `${medicionActiva.id}-${division}`;
@@ -213,11 +199,47 @@ const Campo = () => {
         return nuevos;
       });
       
+      // Limpiar timeout de esta división
+      setTimeoutsGuardado(prev => {
+        const nuevos = { ...prev };
+        delete nuevos[claveLocal];
+        return nuevos;
+      });
+      
     } catch (error) {
       console.error('Error guardando lectura:', error);
       alert('Error al guardar lectura: ' + (error.response?.data?.detail || error.message));
     }
-  };
+  }, [medicionActiva, createLectura]);
+
+  // ✅ NUEVO: Función para programar guardado con debounce
+  const programarGuardado = useCallback((division, valor) => {
+    const claveLocal = `${medicionActiva?.id}-${division}`;
+    
+    // Cancelar timeout anterior si existe
+    if (timeoutsGuardado[claveLocal]) {
+      clearTimeout(timeoutsGuardado[claveLocal]);
+    }
+    
+    // Programar nuevo guardado después de 1 segundo de inactividad
+    const nuevoTimeout = setTimeout(() => {
+      if (valor && valor.trim() !== '') {
+        handleGuardarLectura(division, valor);
+      }
+    }, 1000); // 1 segundo de debounce
+    
+    setTimeoutsGuardado(prev => ({
+      ...prev,
+      [claveLocal]: nuevoTimeout
+    }));
+  }, [medicionActiva?.id, timeoutsGuardado, handleGuardarLectura]);
+
+  // ✅ NUEVO: Limpiar timeouts al desmontar
+  useEffect(() => {
+    return () => {
+      Object.values(timeoutsGuardado).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [timeoutsGuardado]);
 
   // Navegar entre estaciones
   const irAEstacion = async (direccion) => {
@@ -829,17 +851,44 @@ const Campo = () => {
                                 ...prev,
                                 [claveLocal]: nuevoValor
                               }));
+                              
+                              // Programar guardado automático con debounce
+                              programarGuardado(division, nuevoValor);
                             }}
                             onBlur={(e) => {
                               const valor = e.target.value;
-                              if (valor && valor !== getLectura(division)) {
+                              const claveLocal = `${medicionActiva.id}-${division}`;
+                              
+                              // Cancelar timeout pendiente y guardar inmediatamente
+                              if (timeoutsGuardado[claveLocal]) {
+                                clearTimeout(timeoutsGuardado[claveLocal]);
+                                setTimeoutsGuardado(prev => {
+                                  const nuevos = { ...prev };
+                                  delete nuevos[claveLocal];
+                                  return nuevos;
+                                });
+                              }
+                              
+                              if (valor && valor.trim() !== '' && valor !== getLectura(division)) {
                                 handleGuardarLectura(division, valor);
                               }
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 const valor = e.target.value;
-                                if (valor && valor !== getLectura(division)) {
+                                const claveLocal = `${medicionActiva.id}-${division}`;
+                                
+                                // Cancelar timeout pendiente y guardar inmediatamente
+                                if (timeoutsGuardado[claveLocal]) {
+                                  clearTimeout(timeoutsGuardado[claveLocal]);
+                                  setTimeoutsGuardado(prev => {
+                                    const nuevos = { ...prev };
+                                    delete nuevos[claveLocal];
+                                    return nuevos;
+                                  });
+                                }
+                                
+                                if (valor && valor.trim() !== '' && valor !== getLectura(division)) {
                                   handleGuardarLectura(division, valor);
                                 }
                                 e.target.blur(); // Quitar foco para activar onBlur

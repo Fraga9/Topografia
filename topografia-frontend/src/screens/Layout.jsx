@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useLogout } from '../hooks/auth';
 import { useProyectoSeleccionado } from '../context/ProyectoContext';
+import { useEstaciones } from '../hooks/estaciones/useEstaciones';
+import { useMediciones } from '../hooks/mediciones/useMediciones';
+import { useLecturas } from '../hooks/lecturas/useLecturas';
+import { formatNumber } from '../utils/formatters';
 import { 
   Menu, 
   X, 
@@ -13,7 +17,10 @@ import {
   FileBarChart2,
   Map,
   SlidersHorizontal,
-  FileText
+  FileText,
+  Activity,
+  TrendingUp,
+  CheckCircle2
 } from 'lucide-react';
 
 const Layout = () => {
@@ -25,6 +32,117 @@ const Layout = () => {
   
   // Usar el context del proyecto
   const { proyectoSeleccionado, limpiarProyecto } = useProyectoSeleccionado();
+  
+  // Hooks para datos del proyecto activo - SIEMPRE ejecutar para mantener orden
+  const { data: estaciones = [] } = useEstaciones(proyectoSeleccionado?.id, { enabled: !!proyectoSeleccionado?.id });
+  const { data: mediciones = [] } = useMediciones({ proyecto_id: proyectoSeleccionado?.id, enabled: !!proyectoSeleccionado?.id });
+  
+  // Crear array fijo para mantener orden de hooks
+  const medicionesSeguras = Array.isArray(mediciones) ? mediciones : [];
+  
+  // Obtener todas las lecturas para calcular alertas - SIEMPRE ejecutar con array fijo
+  const lecturasQueries = [
+    // Máximo 20 consultas simultáneas para evitar problemas de rendimiento
+    ...Array.from({ length: Math.max(20, medicionesSeguras.length) }, (_, index) => {
+      const medicion = medicionesSeguras[index];
+      return useLecturas(
+        medicion?.id || null, 
+        {}, 
+        { enabled: !!medicion?.id }
+      );
+    })
+  ];
+  
+  // Consolidar todas las lecturas y calcular alertas
+  const todasLasLecturas = useMemo(() => {
+    return lecturasQueries
+      .slice(0, medicionesSeguras.length) // Solo usar las queries que corresponden a mediciones reales
+      .map(query => query?.data || [])
+      .flat()
+      .filter(lectura => lectura && lectura.elv_base_real !== null);
+  }, [lecturasQueries, medicionesSeguras.length]);
+  
+  // Calcular alertas dinámicamente
+  const alertasInfo = useMemo(() => {
+    if (!proyectoSeleccionado || todasLasLecturas.length === 0) {
+      return { total: 0, criticas: 0, advertencias: 0 };
+    }
+    
+    let alertasGeneradas = [];
+    
+    // Analizar cada lectura para generar alertas
+    todasLasLecturas.forEach(lectura => {
+      const diferencia = Math.abs(lectura.elv_base_real - lectura.elv_base_proyecto);
+      
+      // Alertas por tolerancia SCT
+      if (diferencia > proyectoSeleccionado.tolerancia_sct) {
+        let severidad = 'advertencia';
+        if (diferencia > proyectoSeleccionado.tolerancia_sct * 3) {
+          severidad = 'critica';
+        }
+        alertasGeneradas.push({ severidad, tipo: 'tolerancia' });
+      }
+      
+      // Alertas por calidad
+      if (lectura.calidad === 'REVISAR') {
+        alertasGeneradas.push({ severidad: 'critica', tipo: 'calidad' });
+      } else if (lectura.calidad === 'REGULAR') {
+        alertasGeneradas.push({ severidad: 'advertencia', tipo: 'calidad' });
+      }
+    });
+    
+    // Verificar mediciones sin lecturas
+    medicionesSeguras.forEach((medicion, index) => {
+      const lecturasEstacion = lecturasQueries[index]?.data || [];
+      if (lecturasEstacion.length === 0) {
+        alertasGeneradas.push({ severidad: 'critica', tipo: 'sin_lecturas' });
+      }
+    });
+    
+    return {
+      total: alertasGeneradas.length,
+      criticas: alertasGeneradas.filter(a => a.severidad === 'critica').length,
+      advertencias: alertasGeneradas.filter(a => a.severidad === 'advertencia').length
+    };
+  }, [proyectoSeleccionado, todasLasLecturas, medicionesSeguras, lecturasQueries]);
+  
+  // Calcular información contextual del proyecto
+  const proyectoInfo = useMemo(() => {
+    if (!proyectoSeleccionado || !estaciones.length) {
+      return null;
+    }
+    
+    const totalEstacionesReales = estaciones.length; // Usar estaciones reales como las otras pantallas
+    const estacionesMedidas = new Set(medicionesSeguras.map(m => m.estacion_km)).size;
+    const progresoPorcentaje = (estacionesMedidas / totalEstacionesReales) * 100;
+    
+    // Calcular tolerancia SCT
+    const lecturasConTolerancia = todasLasLecturas.filter(l => 
+      l.elv_base_real !== null && l.elv_base_proyecto !== null
+    );
+    const dentroToleranciaSCT = lecturasConTolerancia.filter(l => 
+      Math.abs(l.elv_base_real - l.elv_base_proyecto) <= proyectoSeleccionado.tolerancia_sct
+    ).length;
+    const porcentajeTolerancia = lecturasConTolerancia.length > 0 
+      ? (dentroToleranciaSCT / lecturasConTolerancia.length) * 100 
+      : 0;
+    
+    // Calcular calidad general
+    const lecturasExcelentes = todasLasLecturas.filter(l => l.calidad === 'EXCELENTE').length;
+    const lecturasBuenas = todasLasLecturas.filter(l => l.calidad === 'BUENA').length;
+    const calidadGeneral = todasLasLecturas.length > 0 
+      ? ((lecturasExcelentes + lecturasBuenas) / todasLasLecturas.length) * 100 
+      : 0;
+    
+    return {
+      progresoPorcentaje,
+      estacionesMedidas,
+      totalEstacionesReales,
+      porcentajeTolerancia,
+      calidadGeneral,
+      totalLecturas: todasLasLecturas.length
+    };
+  }, [proyectoSeleccionado, estaciones, medicionesSeguras, todasLasLecturas]);
 
   const menuItems = [
     { id: "proyectos", name: "Proyectos", icon: FolderPlus, href: '/proyectos' },
@@ -57,9 +175,16 @@ const Layout = () => {
 
   return (
     <div className="h-screen bg-gray-50 flex relative overflow-hidden">
-      {/* Mobile/Tablet Overlay */}
+      {/* Mobile/Tablet Overlay con Glass Blur */}
       {!sidebarCollapsed && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={toggleSidebar} />
+        <div 
+          className="fixed inset-0 z-40 md:hidden backdrop-blur-sm bg-black/20" 
+          onClick={toggleSidebar}
+          style={{
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)'
+          }}
+        />
       )}
 
       {/* Sidebar - Optimizado para tablets */}
@@ -112,34 +237,103 @@ const Layout = () => {
           </button>
         </div>
 
-        {/* Project Info - Optimizado para tablets */}
+        {/* Project Info Expandida - Optimizado para tablets */}
         {proyectoSeleccionado && !sidebarCollapsed && (
-          <div className="p-3 md:p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-            <div className="flex items-start justify-between min-w-0">
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-gray-900 text-sm truncate">Proyecto Activo</h3>
-                <p className="text-xs text-gray-600 mt-1 truncate">{proyectoSeleccionado.nombre}</p>
-                <p className="text-xs text-gray-600 truncate">
-                  KM {Math.floor(proyectoSeleccionado.km_inicial/1000)}+{String(proyectoSeleccionado.km_inicial%1000).padStart(3,'0')} - {Math.floor(proyectoSeleccionado.km_final/1000)}+{String(proyectoSeleccionado.km_final%1000).padStart(3,'0')}
-                </p>
-                <p className="text-xs text-gray-600 truncate">
-                  {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
-                </p>
+          <div className="border-b border-gray-200 flex-shrink-0">
+            {/* Header del proyecto */}
+            <div className="p-3 md:p-4 bg-gray-50">
+              <div className="flex items-start justify-between min-w-0">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900 text-sm truncate">Proyecto Activo</h3>
+                  <p className="text-xs text-gray-600 mt-1 truncate">{proyectoSeleccionado.nombre}</p>
+                  <p className="text-xs text-gray-600 truncate">
+                    KM {Math.floor(proyectoSeleccionado.km_inicial/1000)}+{String(proyectoSeleccionado.km_inicial%1000).padStart(3,'0')} - {Math.floor(proyectoSeleccionado.km_final/1000)}+{String(proyectoSeleccionado.km_final%1000).padStart(3,'0')}
+                  </p>
+                  <p className="text-xs text-gray-600 truncate">
+                    {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCambiarProyecto}
+                  className="text-xs text-[#0404b8] hover:text-blue-800 underline flex-shrink-0 ml-2"
+                >
+                  Cambiar
+                </button>
               </div>
-              <button
-                onClick={handleCambiarProyecto}
-                className="text-xs text-[#0404b8] hover:text-blue-800 underline flex-shrink-0 ml-2"
-              >
-                Cambiar
-              </button>
             </div>
+            
+            {/* Información contextual del proyecto */}
+            {proyectoInfo && (
+              <div className="p-3 md:p-4 bg-white space-y-3">
+                {/* Progreso del proyecto */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      Progreso
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      {proyectoInfo.estacionesMedidas}/{proyectoInfo.totalEstacionesReales}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(proyectoInfo.progresoPorcentaje, 100)}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-xs text-blue-600 font-medium">
+                    {formatNumber(proyectoInfo.progresoPorcentaje, 1)}% completado
+                  </span>
+                </div>
+                
+                {/* Indicadores de calidad */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-green-50 border border-green-200 rounded p-2">
+                    <div className="flex items-center gap-1 mb-1">
+                      <CheckCircle2 className="w-3 h-3 text-green-600" />
+                      <span className="text-green-800 font-medium">Tolerancia SCT</span>
+                    </div>
+                    <div className="text-green-600 font-bold">
+                      {formatNumber(proyectoInfo.porcentajeTolerancia, 1)}%
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                    <div className="flex items-center gap-1 mb-1">
+                      <TrendingUp className="w-3 h-3 text-blue-600" />
+                      <span className="text-blue-800 font-medium">Calidad</span>
+                    </div>
+                    <div className="text-blue-600 font-bold">
+                      {formatNumber(proyectoInfo.calidadGeneral, 1)}%
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Resumen de lecturas */}
+                <div className="text-xs text-gray-600 text-center pt-1 border-t border-gray-100">
+                  {formatNumber(proyectoInfo.totalLecturas, 0)} lecturas procesadas
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {proyectoSeleccionado && sidebarCollapsed && (
           <div className="p-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-            <div className="w-8 h-8 bg-[#0404b8] rounded flex items-center justify-center mx-auto">
+            <div className="w-8 h-8 bg-[#0404b8] rounded flex items-center justify-center mx-auto relative">
               <span className="text-xs font-bold text-white">P</span>
+              {/* Indicador de progreso en modo colapsado */}
+              {proyectoInfo && (
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white">
+                  <div 
+                    className={`w-full h-full rounded-full ${
+                      proyectoInfo.progresoPorcentaje >= 80 ? 'bg-green-500' :
+                      proyectoInfo.progresoPorcentaje >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                  ></div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -201,16 +395,20 @@ const Layout = () => {
                       {!sidebarCollapsed && (
                         <>
                           <span className="font-medium text-sm truncate">{item.name}</span>
-                          {item.id === "alertas" && proyectoSeleccionado && (
-                            <span className="ml-auto bg-[#f62631] text-white text-xs px-2 py-1 rounded-full flex-shrink-0">
-                              14
+                          {item.id === "alertas" && proyectoSeleccionado && alertasInfo.total > 0 && (
+                            <span className={`ml-auto text-white text-xs px-2 py-1 rounded-full flex-shrink-0 ${
+                              alertasInfo.criticas > 0 ? 'bg-red-500' : 'bg-yellow-500'
+                            }`}>
+                              {alertasInfo.total}
                             </span>
                           )}
                         </>
                       )}
-                      {sidebarCollapsed && item.id === "alertas" && proyectoSeleccionado && (
-                        <span className="absolute -top-1 -right-1 bg-[#f62631] text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                          14
+                      {sidebarCollapsed && item.id === "alertas" && proyectoSeleccionado && alertasInfo.total > 0 && (
+                        <span className={`absolute -top-1 -right-1 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center ${
+                          alertasInfo.criticas > 0 ? 'bg-red-500' : 'bg-yellow-500'
+                        }`}>
+                          {alertasInfo.total > 99 ? '99+' : alertasInfo.total}
                         </span>
                       )}
                     </Link>
@@ -288,23 +486,51 @@ const Layout = () => {
             <div className="w-10 h-10"></div>
           </div>
           
-          {/* Mobile Project Info */}
+          {/* Mobile Project Info Expandida */}
           {proyectoSeleccionado && (
-            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-blue-900 truncate">{proyectoSeleccionado.nombre}</p>
-                  <p className="text-xs text-blue-600 truncate">
-                    {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
-                  </p>
+            <div className="bg-blue-50 border-b border-blue-200">
+              <div className="px-4 py-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-900 truncate">{proyectoSeleccionado.nombre}</p>
+                    <p className="text-xs text-blue-600 truncate">
+                      {proyectoSeleccionado.tramo}, Cuerpo {proyectoSeleccionado.cuerpo}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCambiarProyecto}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline flex-shrink-0 ml-2 p-1"
+                  >
+                    Cambiar
+                  </button>
                 </div>
-                <button
-                  onClick={handleCambiarProyecto}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline flex-shrink-0 ml-2 p-1"
-                >
-                  Cambiar
-                </button>
               </div>
+              
+              {/* Indicadores móviles */}
+              {proyectoInfo && (
+                <div className="px-4 pb-3">
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="text-blue-700 font-medium">
+                      Progreso: {formatNumber(proyectoInfo.progresoPorcentaje, 1)}%
+                    </span>
+                    <div className="flex gap-3">
+                      {alertasInfo.total > 0 && (
+                        <span className={`px-2 py-1 rounded-full text-white text-xs ${
+                          alertasInfo.criticas > 0 ? 'bg-red-500' : 'bg-yellow-500'
+                        }`}>
+                          {alertasInfo.total} alertas
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-1.5">
+                    <div 
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(proyectoInfo.progresoPorcentaje, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

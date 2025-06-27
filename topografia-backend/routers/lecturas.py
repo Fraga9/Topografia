@@ -87,22 +87,61 @@ def create_lectura(
     current_user: CurrentUser = Depends(get_supabase_user),
     db: Session = Depends(get_db)
 ):
-    """Crear nueva lectura"""
+    """Crear nueva lectura o actualizar existente (UPSERT)"""
     # Verificar que la medición pertenezca al usuario
     medicion = verify_medicion_access(lectura.medicion_id, current_user, db)
     
-    # Aquí se pueden agregar cálculos automáticos para los campos calculados
-    # Por ahora, crear la lectura con los datos básicos
-    db_lectura = LecturaDivision(**lectura.dict())
+    # Buscar si ya existe una lectura para esta medición y división
+    lectura_existente = db.query(LecturaDivision).filter(
+        LecturaDivision.medicion_id == lectura.medicion_id,
+        LecturaDivision.division_transversal == lectura.division_transversal
+    ).first()
     
-    # Calcular elv_base_real si tenemos la información necesaria
-    if medicion.altura_aparato:
-        db_lectura.elv_base_real = medicion.altura_aparato - lectura.lectura_mira
-    
-    db.add(db_lectura)
-    db.commit()
-    db.refresh(db_lectura)
-    return db_lectura
+    if lectura_existente:
+        # Actualizar lectura existente (comportamiento UPSERT)
+        lectura_existente.lectura_mira = lectura.lectura_mira
+        
+        # Recalcular elv_base_real si tenemos la información necesaria
+        if medicion.altura_aparato:
+            lectura_existente.elv_base_real = medicion.altura_aparato - lectura.lectura_mira
+        
+        db.commit()
+        db.refresh(lectura_existente)
+        return lectura_existente
+    else:
+        # Crear nueva lectura
+        db_lectura = LecturaDivision(**lectura.dict())
+        
+        # Calcular elv_base_real si tenemos la información necesaria
+        if medicion.altura_aparato:
+            db_lectura.elv_base_real = medicion.altura_aparato - lectura.lectura_mira
+        
+        try:
+            db.add(db_lectura)
+            db.commit()
+            db.refresh(db_lectura)
+            return db_lectura
+        except Exception as e:
+            db.rollback()
+            # Si falla por constraint único, intentar actualizar en su lugar
+            if "unique constraint" in str(e).lower() or "duplicate key" in str(e).lower():
+                lectura_existente = db.query(LecturaDivision).filter(
+                    LecturaDivision.medicion_id == lectura.medicion_id,
+                    LecturaDivision.division_transversal == lectura.division_transversal
+                ).first()
+                
+                if lectura_existente:
+                    lectura_existente.lectura_mira = lectura.lectura_mira
+                    if medicion.altura_aparato:
+                        lectura_existente.elv_base_real = medicion.altura_aparato - lectura.lectura_mira
+                    db.commit()
+                    db.refresh(lectura_existente)
+                    return lectura_existente
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error creando lectura: {str(e)}"
+            )
 
 @router.put("/{lectura_id}", response_model=schemas.LecturaDivisionResponse)
 def update_lectura(

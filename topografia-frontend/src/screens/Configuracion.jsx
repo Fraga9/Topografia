@@ -61,7 +61,7 @@ const Configuracion = () => {
 
       if (!isNaN(kmInicial) && !isNaN(kmFinal) && !isNaN(intervalo) && intervalo > 0) {
         const longitud = kmFinal - kmInicial;
-        const totalEstaciones = Math.ceil(longitud / intervalo) + 1; // +1 para incluir la estación inicial
+        const totalEstaciones = Math.floor(longitud / intervalo) + 1; // +1 para incluir la estación inicial
 
         setCalculados({
           total_estaciones: totalEstaciones,

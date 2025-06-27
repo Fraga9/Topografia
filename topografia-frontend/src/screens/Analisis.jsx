@@ -22,10 +22,21 @@ const Analisis = () => {
     isLoading: loadingMediciones 
   } = useMediciones({ proyecto_id: proyecto?.id, enabled: !!proyecto?.id });
 
-  // Obtener todas las lecturas de todas las mediciones
-  const lecturasQueries = mediciones.map(medicion => 
-    useLecturas(medicion.id, {}, { enabled: !!medicion.id })
-  );
+  // Crear array fijo para mantener orden de hooks
+  const medicionesSeguras = Array.isArray(mediciones) ? mediciones : [];
+  
+  // Obtener todas las lecturas de todas las mediciones - SIEMPRE ejecutar con array fijo
+  const lecturasQueries = [
+    // Máximo 20 consultas simultáneas para evitar problemas de rendimiento
+    ...Array.from({ length: Math.max(20, medicionesSeguras.length) }, (_, index) => {
+      const medicion = medicionesSeguras[index];
+      return useLecturas(
+        medicion?.id || null, 
+        {}, 
+        { enabled: !!medicion?.id }
+      );
+    })
+  ];
 
   // Formatear KM para mostrar
   const formatearKM = (km) => {
@@ -39,27 +50,28 @@ const Analisis = () => {
   // Consolidar todas las lecturas
   const todasLasLecturas = useMemo(() => {
     return lecturasQueries
-      .map(query => query.data || [])
+      .slice(0, medicionesSeguras.length) // Solo usar las queries que corresponden a mediciones reales
+      .map(query => query?.data || [])
       .flat()
       .filter(lectura => lectura && lectura.elv_base_real !== null);
-  }, [lecturasQueries]);
+  }, [lecturasQueries, medicionesSeguras.length]);
 
   // Análisis completo de estadísticas
   const analisisCompleto = useMemo(() => {
-    if (!proyecto || !mediciones.length || todasLasLecturas.length === 0) {
+    if (!proyecto || !medicionesSeguras.length || todasLasLecturas.length === 0) {
       return null;
     }
 
     const lecturas = todasLasLecturas;
     
     // === ESTADÍSTICAS PRINCIPALES DEL PROYECTO ===
-    const totalEstacionesPlanificadas = Math.ceil((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo) + 1;
-    const estacionesMedidas = new Set(mediciones.map(m => m.estacion_km)).size;
+    const totalEstacionesReales = estaciones.length; // Usar estaciones reales como las otras pantallas
+    const estacionesMedidas = new Set(medicionesSeguras.map(m => m.estacion_km)).size;
     const totalDivisiones = (proyecto.divisiones_izquierdas?.length || 0) + (proyecto.divisiones_derechas?.length || 0) + 1;
     const divisionesMedidas = lecturas.length;
     const coberturaTransversal = divisionesMedidas / (estacionesMedidas * totalDivisiones) || 0;
     
-    const fechasOrdenadas = mediciones
+    const fechasOrdenadas = medicionesSeguras
       .map(m => new Date(m.fecha_medicion))
       .filter(f => !isNaN(f))
       .sort((a, b) => a - b);
@@ -135,7 +147,7 @@ const Analisis = () => {
     // Identificar zonas problemáticas (estaciones con >50% de lecturas fuera de tolerancia)
     const estacionesProblematicas = [];
     const lecturasAgrupadas = lecturas.reduce((grupos, lectura) => {
-      const estacionKm = mediciones.find(m => m.id === lectura.medicion_id)?.estacion_km;
+      const estacionKm = medicionesSeguras.find(m => m.id === lectura.medicion_id)?.estacion_km;
       if (estacionKm) {
         if (!grupos[estacionKm]) grupos[estacionKm] = [];
         grupos[estacionKm].push(lectura);
@@ -198,9 +210,9 @@ const Analisis = () => {
 
     return {
       // Estadísticas principales
-      totalEstacionesPlanificadas,
+      totalEstacionesReales,
       estacionesMedidas,
-      progresoPorcentaje: (estacionesMedidas / totalEstacionesPlanificadas) * 100,
+      progresoPorcentaje: (estacionesMedidas / totalEstacionesReales) * 100,
       coberturaTransversal: coberturaTransversal * 100,
       diasTrabajo,
       eficienciaDiaria,
@@ -231,10 +243,10 @@ const Analisis = () => {
       
       // Datos generales
       totalLecturas: lecturas.length,
-      totalMediciones: mediciones.length,
+      totalMediciones: medicionesSeguras.length,
       totalEstaciones: estaciones.length
     };
-  }, [proyecto, mediciones, todasLasLecturas, estaciones]);
+  }, [proyecto, medicionesSeguras, todasLasLecturas, estaciones]);
 
   const renderEstadisticasPrincipales = () => (
     <div className="space-y-6">
@@ -249,7 +261,7 @@ const Analisis = () => {
             </div>
             <div className="text-sm text-blue-600">Progreso de Mediciones</div>
             <div className="text-xs text-gray-500 mt-1">
-              {analisisCompleto?.estacionesMedidas || 0} de {analisisCompleto?.totalEstacionesPlanificadas || 0}
+              {analisisCompleto?.estacionesMedidas || 0} de {analisisCompleto?.totalEstacionesReales || 0}
             </div>
           </div>
           
@@ -343,7 +355,7 @@ const Analisis = () => {
               {analisisCompleto?.puntosCriticos || 0}
             </div>
             <div className="text-sm text-red-600">Puntos Críticos</div>
-            <div className="text-xs text-gray-500 mt-1">>3x tolerancia</div>
+            <div className="text-xs text-gray-500 mt-1">&gt;3x tolerancia</div>
           </div>
           
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
@@ -351,7 +363,7 @@ const Analisis = () => {
               {analisisCompleto?.estacionesProblematicas?.length || 0}
             </div>
             <div className="text-sm text-orange-600">Zonas Problemáticas</div>
-            <div className="text-xs text-gray-500 mt-1">>50% fuera tolerancia</div>
+            <div className="text-xs text-gray-500 mt-1">&gt;50% fuera tolerancia</div>
           </div>
           
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
@@ -813,7 +825,7 @@ const Analisis = () => {
       </div>
       
       {/* Tabla consolidada de todas las mediciones */}
-      {analisisCompleto && mediciones.length > 0 && (
+      {analisisCompleto && medicionesSeguras.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h4 className="font-medium text-gray-900 mb-3">Detalle por Estación</h4>
           
@@ -839,7 +851,7 @@ const Analisis = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {mediciones.map((medicion, index) => {
+                {medicionesSeguras.map((medicion, index) => {
                   const lecturasEstacion = lecturasQueries[index]?.data || [];
                   const dentroToleranciaSCT = lecturasEstacion.filter(l => 
                     l.elv_base_real !== null && l.elv_base_proyecto !== null &&

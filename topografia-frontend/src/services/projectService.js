@@ -98,7 +98,7 @@ export const projectService = {
       stats.longitud_total = project.km_final - project.km_inicial;
       
       const intervalo = project.configuracion?.intervalo || DEFAULTS_PROYECTO.INTERVALO;
-      stats.estaciones_estimadas = Math.ceil((stats.longitud_total * 1000) / intervalo);
+      stats.estaciones_estimadas = Math.floor((stats.longitud_total * 1000) / intervalo) + 1;
       
       // Estimación básica: 30 minutos por estación
       stats.tiempo_estimado_horas = (stats.estaciones_estimadas * 0.5);

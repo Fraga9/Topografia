@@ -76,7 +76,7 @@ export const useProyecto = () => {
   // ✅ NUEVO: Cálculos derivados
   const calculosProyecto = informacionProyecto ? {
     longitudReal: informacionProyecto.kmFinal - informacionProyecto.kmInicial,
-    estacionesTotalesCalculadas: Math.ceil((informacionProyecto.kmFinal - informacionProyecto.kmInicial) / informacionProyecto.intervalo) + 1,
+    estacionesTotalesCalculadas: Math.floor((informacionProyecto.kmFinal - informacionProyecto.kmInicial) / informacionProyecto.intervalo) + 1,
     rangoKmFormateado: `${formatearKM(informacionProyecto.kmInicial)} - ${formatearKM(informacionProyecto.kmFinal)}`,
     toleranciaSctMm: (informacionProyecto.toleranciaSct * 1000).toFixed(1)
   } : null;

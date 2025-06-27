@@ -89,10 +89,9 @@ def create_medicion(
             detail=f"Ya existe una medición en la estación km {medicion.estacion_km}"
         )
     
-    # Crear la medición con cálculo automático de altura_aparato
+    # Crear la medición SIN altura_aparato (se calcula automáticamente en DB)
     medicion_data = medicion.dict()
-    altura_aparato = medicion_data['bn_altura'] + medicion_data['bn_lectura']
-    medicion_data['altura_aparato'] = Decimal(str(altura_aparato))
+    medicion_data.pop('altura_aparato', None)  # Remover si existe
     
     db_medicion = MedicionEstacion(**medicion_data)
     db.add(db_medicion)
@@ -130,9 +129,7 @@ def update_medicion(
     for field, value in update_data.items():
         setattr(db_medicion, field, value)
     
-    # Recalcular altura_aparato si se actualizó bn_altura o bn_lectura
-    if 'bn_altura' in update_data or 'bn_lectura' in update_data:
-        db_medicion.altura_aparato = db_medicion.bn_altura + db_medicion.bn_lectura
+    # NO recalcular altura_aparato - se calcula automáticamente en DB como GENERATED column
     
     db.commit()
     db.refresh(db_medicion)

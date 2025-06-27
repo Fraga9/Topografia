@@ -88,7 +88,7 @@ const Dashboard = () => {
       }
 
       // 4. Cálculos basados en datos reales
-      const estacionesTotales = Math.ceil((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo);
+      const estacionesTotales = Math.floor((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo) + 1;
       const estacionesConMediciones = mediciones?.length || 0;
       const progresoReal = estacionesTotales > 0 ? Math.round((estacionesConMediciones / estacionesTotales) * 100) : 0;
       
@@ -118,7 +118,7 @@ const Dashboard = () => {
     console.log('🧮 Calculando estadísticas reales...');
 
     // Calcular estaciones totales basado en parámetros reales del proyecto
-    const estacionesTotales = Math.ceil((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo);
+    const estacionesTotales = Math.floor((proyecto.km_final - proyecto.km_inicial) / proyecto.intervalo) + 1;
     const estacionesConMediciones = mediciones?.length || 0;
     const estacionesDefinidas = estaciones?.length || 0;
     

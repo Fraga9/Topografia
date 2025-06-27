@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DECIMAL, Date, String, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, DECIMAL, Date, String, Text, ForeignKey, UniqueConstraint, Computed
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
@@ -15,7 +15,7 @@ class MedicionEstacion(Base):
     estacion_km = Column(DECIMAL(10, 3), nullable=False)
     bn_altura = Column(DECIMAL(10, 6), nullable=False)
     bn_lectura = Column(DECIMAL(8, 6), nullable=False)
-    altura_aparato = Column(DECIMAL(10, 6), nullable=True)
+    altura_aparato = Column(DECIMAL(10, 6), Computed("bn_altura + bn_lectura"), nullable=True)
     fecha_medicion = Column(Date, nullable=False, server_default=func.current_date())
     operador = Column(String(100), nullable=True)
     condiciones_clima = Column(String(100), nullable=True)
