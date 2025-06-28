@@ -21,7 +21,7 @@ const Campo = () => {
   // Estados principales
   const [estacionActual, setEstacionActual] = useState(0);
   const [medicionActiva, setMedicionActiva] = useState(null);
-  const [vistaActiva, setVistaActiva] = useState('captura'); // 'captura' o 'graficas'
+  const [vistaActiva, setVistaActiva] = useState('captura'); // 'captura', 'graficas' o 'resultados'
   
   // Estado local para los valores de input (mejora la UX)
   const [valoresLocales, setValoresLocales] = useState({});
@@ -511,6 +511,378 @@ const Campo = () => {
     );
   };
 
+  // ✅ NUEVA VISTA: Resultados detallados con todos los cálculos
+  const renderResultados = () => {
+    if (!medicionActiva) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Configure el Banco de Nivel</h3>
+            <p className="text-gray-600">
+              Para ver los resultados detallados, primero configure el banco de nivel en la vista de Captura.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!lecturas || lecturas.length === 0) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <div className="text-blue-400 mb-4">
+              <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Sin Lecturas Registradas</h3>
+            <p className="text-gray-600 mb-4">
+              No hay lecturas registradas para esta estación. Vaya a la vista de Captura para ingresar datos.
+            </p>
+            <button
+              onClick={() => setVistaActiva('captura')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+            >
+              Ir a Captura
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Calcular estadísticas de calidad
+    const estadisticasCalidad = {
+      total: lecturas.length,
+      excelente: lecturas.filter(l => l.calidad === 'EXCELENTE').length,
+      buena: lecturas.filter(l => l.calidad === 'BUENA').length,
+      regular: lecturas.filter(l => l.calidad === 'REGULAR').length,
+      revisar: lecturas.filter(l => l.calidad === 'REVISAR').length,
+      cumple: lecturas.filter(l => l.cumple_tolerancia === true).length,
+      corte: lecturas.filter(l => l.clasificacion === 'CORTE').length,
+      terraplen: lecturas.filter(l => l.clasificacion === 'TERRAPLEN').length
+    };
+
+    const porcentajeCumplimiento = (estadisticasCalidad.cumple / estadisticasCalidad.total) * 100;
+
+    // Función para exportar a CSV
+    const exportarCSV = () => {
+      const headers = [
+        'División (m)',
+        'Lectura Mira (m)',
+        'Elv. Base Real (m)',
+        'Elv. Base Proyecto (m)',
+        'Elv. Concreto Proyecto (m)',
+        'Esp. Concreto (m)',
+        'Diferencia (m)',
+        'Clasificación',
+        'Cumple Tolerancia',
+        'Calidad'
+      ];
+
+      const rows = lecturas.map(l => [
+        l.division_transversal,
+        l.lectura_mira,
+        l.elv_base_real,
+        l.elv_base_proyecto,
+        l.elv_concreto_proyecto,
+        l.esp_concreto_proyecto,
+        l.elv_base_real && l.elv_base_proyecto ? (l.elv_base_real - l.elv_base_proyecto).toFixed(6) : '',
+        l.clasificacion || '',
+        l.cumple_tolerancia ? 'SÍ' : 'NO',
+        l.calidad || ''
+      ]);
+
+      const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `resultados_km_${formatearKM(estacionSeleccionada?.km)}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Header con estadísticas */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">
+                Resultados Detallados - KM {formatearKM(estacionSeleccionada?.km)}
+              </h2>
+              <p className="text-blue-100">
+                Análisis completo de elevaciones y tolerancias para {estadisticasCalidad.total} divisiones transversales
+              </p>
+            </div>
+            
+            <div className="mt-4 lg:mt-0 flex flex-col lg:flex-row gap-3">
+              <button
+                onClick={exportarCSV}
+                className="bg-white bg-opacity-90 hover:bg-opacity-100 text-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-md"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exportar CSV
+              </button>
+              <div className="bg-white bg-opacity-90 px-4 py-2 rounded-lg text-sm shadow-md">
+                <div className="font-semibold text-blue-800">{porcentajeCumplimiento.toFixed(1)}% Cumplimiento</div>
+                <div className="text-xs text-blue-600">Tolerancia SCT</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Dashboard de calidad */}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{estadisticasCalidad.excelente}</div>
+            <div className="text-xs text-gray-600">Excelente</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-green-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.excelente/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">{estadisticasCalidad.buena}</div>
+            <div className="text-xs text-gray-600">Buena</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-blue-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.buena/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600">{estadisticasCalidad.regular}</div>
+            <div className="text-xs text-gray-600">Regular</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-yellow-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.regular/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-red-600">{estadisticasCalidad.revisar}</div>
+            <div className="text-xs text-gray-600">Revisar</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-red-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.revisar/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-orange-600">{estadisticasCalidad.corte}</div>
+            <div className="text-xs text-gray-600">Corte</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-orange-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.corte/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-purple-600">{estadisticasCalidad.terraplen}</div>
+            <div className="text-xs text-gray-600">Terraplén</div>
+            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+              <div className="bg-purple-500 h-1 rounded-full" style={{width: `${(estadisticasCalidad.terraplen/estadisticasCalidad.total)*100}%`}}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabla detallada de resultados */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Tabla Detallada de Cálculos
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Resultados completos de elevaciones y análisis de tolerancias
+            </p>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    División (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Lectura Mira (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Elv. Base Real (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Elv. Base Proyecto (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Elv. Concreto Proy. (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Esp. Concreto (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Diferencia (m)
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Clasificación
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Tolerancia
+                  </th>
+                  <th className="px-3 lg:px-6 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                    Calidad
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {lecturas
+                  .sort((a, b) => parseFloat(a.division_transversal) - parseFloat(b.division_transversal))
+                  .map((lectura, index) => {
+                    const diferencia = lectura.elv_base_real && lectura.elv_base_proyecto 
+                      ? parseFloat(lectura.elv_base_real) - parseFloat(lectura.elv_base_proyecto)
+                      : null;
+                    
+                    return (
+                      <tr 
+                        key={lectura.id} 
+                        className={`hover:bg-gray-50 ${
+                          lectura.calidad === 'REVISAR' ? 'bg-red-50' :
+                          lectura.calidad === 'REGULAR' ? 'bg-yellow-50' :
+                          lectura.calidad === 'EXCELENTE' ? 'bg-green-50' : ''
+                        }`}
+                      >
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {parseFloat(lectura.division_transversal) === 0 ? '0.00 (EJE)' : 
+                           parseFloat(lectura.division_transversal) < 0 ? 
+                           `${Math.abs(parseFloat(lectura.division_transversal)).toFixed(2)} (I)` :
+                           `${parseFloat(lectura.division_transversal).toFixed(2)} (D)`}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                          {formatNumber(lectura.lectura_mira, 3)}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-blue-600">
+                          {lectura.elv_base_real ? formatNumber(lectura.elv_base_real, 3) : '-'}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">
+                          {lectura.elv_base_proyecto ? formatNumber(lectura.elv_base_proyecto, 3) : '-'}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center text-purple-600">
+                          {lectura.elv_concreto_proyecto ? formatNumber(lectura.elv_concreto_proyecto, 3) : '-'}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-indigo-600">
+                          {lectura.esp_concreto_proyecto ? formatNumber(lectura.esp_concreto_proyecto, 3) : '-'}
+                        </td>
+                        <td className={`px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-center font-bold ${
+                          diferencia === null ? 'text-gray-400' :
+                          Math.abs(diferencia) <= (proyecto?.tolerancia_sct || 0.005) ? 'text-green-600' :
+                          diferencia > 0 ? 'text-red-600' : 'text-orange-600'
+                        }`}>
+                          {diferencia !== null ? 
+                            `${diferencia >= 0 ? '+' : ''}${diferencia.toFixed(6)}` : 
+                            '-'
+                          }
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-center">
+                          {lectura.clasificacion && (
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              lectura.clasificacion === 'CUMPLE' ? 'bg-green-100 text-green-800' :
+                              lectura.clasificacion === 'CORTE' ? 'bg-red-100 text-red-800' :
+                              lectura.clasificacion === 'TERRAPLEN' ? 'bg-orange-100 text-orange-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {lectura.clasificacion}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lectura.cumple_tolerancia ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {lectura.cumple_tolerancia ? 'SÍ' : 'NO'}
+                          </span>
+                        </td>
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-center">
+                          {lectura.calidad && (
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              lectura.calidad === 'EXCELENTE' ? 'bg-green-100 text-green-800' :
+                              lectura.calidad === 'BUENA' ? 'bg-blue-100 text-blue-800' :
+                              lectura.calidad === 'REGULAR' ? 'bg-yellow-100 text-yellow-800' :
+                              lectura.calidad === 'REVISAR' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {lectura.calidad}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Alertas y recomendaciones */}
+        {(estadisticasCalidad.revisar > 0 || estadisticasCalidad.regular > 0) && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              Alertas de Calidad
+            </h3>
+            
+            <div className="space-y-3">
+              {estadisticasCalidad.revisar > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-red-800">
+                        {estadisticasCalidad.revisar} divisiones requieren revisión inmediata
+                      </h4>
+                      <p className="text-sm text-red-700 mt-1">
+                        Estas mediciones exceden significativamente las tolerancias establecidas y deben ser verificadas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {estadisticasCalidad.regular > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-yellow-800">
+                        {estadisticasCalidad.regular} divisiones con calidad regular
+                      </h4>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        Estas mediciones están fuera de tolerancia pero dentro de rangos aceptables. Considere repetir la medición.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Si no hay proyecto seleccionado
   if (!tieneProyecto) {
     return (
@@ -623,7 +995,7 @@ const Campo = () => {
                   await guardarValoresPendientes();
                   setVistaActiva('captura');
                 }}
-                className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
+                className={`px-2 lg:px-3 py-2 rounded-md text-xs lg:text-sm font-medium ${
                   vistaActiva === 'captura' 
                     ? 'bg-white text-gray-900 shadow' 
                     : 'text-gray-500 hover:text-gray-700'
@@ -636,13 +1008,26 @@ const Campo = () => {
                   await guardarValoresPendientes();
                   setVistaActiva('graficas');
                 }}
-                className={`px-3 lg:px-4 py-2 rounded-md text-sm font-medium ${
+                className={`px-2 lg:px-3 py-2 rounded-md text-xs lg:text-sm font-medium ${
                   vistaActiva === 'graficas' 
                     ? 'bg-white text-gray-900 shadow' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Gráficas
+              </button>
+              <button
+                onClick={async () => {
+                  await guardarValoresPendientes();
+                  setVistaActiva('resultados');
+                }}
+                className={`px-2 lg:px-3 py-2 rounded-md text-xs lg:text-sm font-medium ${
+                  vistaActiva === 'resultados' 
+                    ? 'bg-white text-gray-900 shadow' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Resultados
               </button>
             </div>
           </div>
@@ -937,9 +1322,12 @@ const Campo = () => {
             </div>
           )}
         </div>
-      ) : (
+      ) : vistaActiva === 'graficas' ? (
         /* Vista de gráficas */
         renderGrafica()
+      ) : (
+        /* Vista de resultados */
+        renderResultados()
       )}
 
       {/* Estado de guardado */}

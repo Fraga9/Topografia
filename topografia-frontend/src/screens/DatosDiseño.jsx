@@ -160,7 +160,7 @@ const DatosDiseño = () => {
     setEditandoEstacion(estacion);
     setNuevaEstacion({
       km: estacion.km,
-      pendiente_derecha: estacion.pendiente_derecha,
+      pendiente_derecha: estacion.pendiente_derecha * 100, // Convertir a porcentaje para edición
       base_cl: estacion.base_cl
     });
     setMostrarFormulario(true);
@@ -208,7 +208,7 @@ const DatosDiseño = () => {
               setNuevaEstacion({ km: '', pendiente_derecha: '', base_cl: '' });
               setMostrarFormulario(true);
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
           >
             + Nueva Estación
           </button>
@@ -271,7 +271,7 @@ const DatosDiseño = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => handleEditarEstacion(estacion)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-3"
+                        className="text-blue-600 hover:text-blue-900 mr-3"
                       >
                         Editar
                       </button>
@@ -325,7 +325,7 @@ const DatosDiseño = () => {
             });
             setMostrarFormulario(true);
           }}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
         >
           + Nueva Medición
         </button>
@@ -393,7 +393,7 @@ const DatosDiseño = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => handleEditarMedicion(medicion)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-3"
+                        className="text-blue-600 hover:text-blue-900 mr-3"
                       >
                         Editar
                       </button>
@@ -429,7 +429,13 @@ const DatosDiseño = () => {
 
   // Formulario para estaciones
   const renderFormularioEstacion = () => (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div 
+      className="fixed inset-0 backdrop-blur-sm bg-black/20 overflow-y-auto h-full w-full z-50"
+      style={{
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)'
+      }}
+    >
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 className="text-lg font-bold text-gray-900 mb-4">
           {editandoEstacion ? 'Editar Estación' : 'Nueva Estación'}
@@ -507,7 +513,13 @@ const DatosDiseño = () => {
 
   // Formulario para mediciones
   const renderFormularioMedicion = () => (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div 
+      className="fixed inset-0 backdrop-blur-sm bg-black/20 overflow-y-auto h-full w-full z-50"
+      style={{
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)'
+      }}
+    >
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 className="text-lg font-bold text-gray-900 mb-4">
           {editandoMedicion ? 'Editar Medición' : 'Nueva Medición'}
@@ -660,17 +672,17 @@ const DatosDiseño = () => {
             <div className="text-sm text-gray-600">Estaciones Teóricas</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{mediciones.length}</div>
+            <div className="text-2xl font-bold text-blue-500">{mediciones.length}</div>
             <div className="text-sm text-gray-600">Mediciones</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-blue-700">
               {formatNumber(proyecto.intervalo, 1)}m
             </div>
             <div className="text-sm text-gray-600">Intervalo</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">
+            <div className="text-2xl font-bold text-blue-800">
               {formatNumber(proyecto.espesor * 1000, 0)}mm
             </div>
             <div className="text-sm text-gray-600">Espesor</div>
@@ -682,19 +694,18 @@ const DatosDiseño = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           {[
-            { id: 'estaciones', label: 'Estaciones Teóricas', icon: '📍' },
-            { id: 'mediciones', label: 'Mediciones de Estación', icon: '📏' }
+            { id: 'estaciones', label: 'Estaciones Teóricas' },
+            { id: 'mediciones', label: 'Mediciones de Estación' }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setVistaActiva(tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 vistaActiva === tab.id
-                  ? 'border-indigo-500 text-indigo-600'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              <span className="mr-2">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
