@@ -5,7 +5,7 @@ import { useProyecto } from '../hooks/useProyecto';
 import { useEstaciones } from '../hooks/estaciones/useEstaciones';
 import { useMediciones } from '../hooks/mediciones/useMediciones';
 import { formatDate } from '../utils/formatters';
-import { TrendingUp, AlertCircle, CheckCircle, Clock, FolderPlus, BarChart3, Settings, MapPin, FileText, Play } from "lucide-react";
+import { TrendingUp, AlertCircle, CheckCircle, FolderPlus, BarChart3, Settings, MapPin, FileText, Play } from "lucide-react";
 
 const Dashboard = () => {
   const { usuario } = useAuth();
@@ -127,9 +127,6 @@ const Dashboard = () => {
     const completadasReal = estacionesConMediciones;
     const restantes = estacionesDefinidas - completadasReal;
     
-    // Tiempo estimado basado en productividad real
-    const tiempoEstimadoPorEstacion = 0.5; // horas por estación (configurable)
-    const tiempoRestante = restantes * tiempoEstimadoPorEstacion;
 
     // Análisis de mediciones para obtener desviaciones y volúmenes reales
     let desviacionPromedio = "Sin datos";
@@ -156,7 +153,6 @@ const Dashboard = () => {
       definidas: estacionesDefinidas,
       desviacion: desviacionPromedio,
       volumen: volumenTotal,
-      tiempo: `${tiempoRestante.toFixed(1)}h`,
       alertasCriticas,
       alertasWarning,
       // Datos adicionales para debugging
@@ -164,7 +160,6 @@ const Dashboard = () => {
         estacionesTotales,
         estacionesConMediciones,
         estacionesDefinidas,
-        tiempoEstimadoPorEstacion,
         kmInicial: proyecto.km_inicial,
         kmFinal: proyecto.km_final,
         intervalo: proyecto.intervalo
@@ -350,39 +345,45 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Tarjeta de Tiempo */}
+        {/* Tarjeta de Información General del Proyecto */}
         <div className="col-span-12 lg:col-span-4">
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/40 transform hover:scale-[1.01] transition-all duration-300 h-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="bg-emerald-100 rounded-xl p-3">
-                <Clock className="w-6 h-6 text-emerald-600" />
+              <div className="bg-indigo-100 rounded-xl p-3">
+                <FileText className="w-6 h-6 text-indigo-600" />
               </div>
               <div className="text-right">
-                {isLoadingMediciones ? (
-                  <div className="w-16 h-10 bg-slate-200 rounded animate-pulse"></div>
-                ) : (
-                  <div className="text-3xl font-bold text-slate-800">{stats?.tiempo || '0h'}</div>
-                )}
-                <div className="text-slate-600 text-sm">Estimado</div>
+                <div className="text-3xl font-bold text-slate-800">{((proyecto?.km_final - proyecto?.km_inicial) || 0)}m</div>
+                <div className="text-slate-600 text-sm">Longitud</div>
               </div>
             </div>
-            <h4 className="font-semibold text-slate-800 mb-2 text-lg">Tiempo Restante</h4>
+            <h4 className="font-semibold text-slate-800 mb-2 text-lg">Información General</h4>
             <p className="text-slate-600 text-sm mb-6">
-              Para completar todas las mediciones pendientes
+              Detalles principales del proyecto topográfico
             </p>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Productividad:</span>
-                <span className="font-medium text-slate-800">0.5h/estación</span>
+                <span className="text-slate-600">Tramo:</span>
+                <span className="font-medium text-slate-800">{proyecto?.tramo || 'N/A'}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Restantes:</span>
-                <span className="font-medium text-slate-800">{(stats?.total || 0) - (stats?.completadas || 0)} estaciones</span>
+                <span className="text-slate-600">Cuerpo:</span>
+                <span className="font-medium text-slate-800">{proyecto?.cuerpo || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Intervalo:</span>
+                <span className="font-medium text-slate-800">{proyecto?.intervalo || 0}m</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Estado:</span>
+                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-medium">
+                  {proyecto?.estado || 'N/A'}
+                </span>
               </div>
             </div>
             <div className="flex items-center mt-4">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full mr-2"></div>
-              <span className="text-xs text-slate-600">Estimación automática</span>
+              <div className="w-2 h-2 bg-indigo-400 rounded-full mr-2"></div>
+              <span className="text-xs text-slate-600">Proyecto activo</span>
             </div>
           </div>
         </div>
