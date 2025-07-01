@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProyectoProvider } from './context/ProyectoContext';
 import { useAuth } from './hooks/auth';
 import Login from './screens/Login';
+import Register from './screens/Register';
 import Layout from './screens/Layout';
 import Dashboard from './screens/Dashboard';
 import Proyectos from './screens/Proyectos';
@@ -40,6 +41,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={
         <ProtectedRoute>
           <Layout />

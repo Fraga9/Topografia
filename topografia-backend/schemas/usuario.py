@@ -5,22 +5,35 @@ import uuid
 
 # Schema base para campos comunes
 class PerfilUsuarioBase(BaseModel):
-    email: Optional[EmailStr] = None
-    nombre_completo: Optional[str] = None
+    email: EmailStr
+    nombre_completo: str
     empresa: Optional[str] = None
+    organizacion: Optional[str] = None
 
-# Schema para crear usuario
-class PerfilUsuarioCreate(PerfilUsuarioBase):
-    pass
+# Schema para crear usuario (cuando se registra desde Supabase)
+class PerfilUsuarioCreate(BaseModel):
+    id: uuid.UUID  # ID de auth.users de Supabase
+    email: EmailStr
+    nombre_completo: str
+    empresa: Optional[str] = None
+    organizacion: Optional[str] = None
 
 # Schema para actualizar usuario
-class PerfilUsuarioUpdate(PerfilUsuarioBase):
+class PerfilUsuarioUpdate(BaseModel):
+    nombre_completo: Optional[str] = None
+    empresa: Optional[str] = None
+    organizacion: Optional[str] = None
     activo: Optional[bool] = None
 
 # Schema para respuesta con todos los campos
-class PerfilUsuarioResponse(PerfilUsuarioBase):
+class PerfilUsuarioResponse(BaseModel):
     id: uuid.UUID
+    email: EmailStr
+    nombre_completo: str
+    empresa: Optional[str] = None
+    organizacion: Optional[str] = None
     fecha_registro: datetime
+    fecha_actualizacion: datetime
     activo: bool
     
     class Config:

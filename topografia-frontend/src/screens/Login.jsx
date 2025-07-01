@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useLogin, useIsAuthenticated } from '../hooks/auth';
 import { authService } from '../services';
 import { Eye, EyeOff, User, ArrowRight, AlertCircle } from 'lucide-react';
@@ -19,9 +19,9 @@ const Login = () => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const hasValidConfig = supabaseUrl && !supabaseUrl.includes('your-project');
 
-    // Verificar si hay bloqueo por intentos fallidos
-    const isLocked = authService.loginAttempts.isLocked();
-    const lockTimeRemaining = isLocked ? authService.loginAttempts.getRemainingLockTime() : 0;
+    // Verificar si hay bloqueo por intentos fallidos para este email específico
+    const isLocked = credentials.email ? authService.loginAttempts.isLocked(credentials.email) : false;
+    const lockTimeRemaining = isLocked ? authService.loginAttempts.getRemainingLockTime(credentials.email) : 0;
 
     // Redirigir si ya está autenticado
     if (isAuthenticated && !loading) {
@@ -69,12 +69,12 @@ const Login = () => {
         try {
             await login.mutateAsync(credentials);
             // El login exitoso es manejado automáticamente por el hook
-            authService.loginAttempts.reset();
+            authService.loginAttempts.reset(credentials.email);
         } catch (error) {
             console.error('Error en login:', error);
             
-            // Incrementar intentos fallidos
-            authService.loginAttempts.increment();
+            // Incrementar intentos fallidos para este email específico
+            authService.loginAttempts.increment(credentials.email);
             
             let errorMessage = 'Error al iniciar sesión. Verifica tus credenciales.';
             
@@ -240,6 +240,35 @@ const Login = () => {
                             )}
                         </button>
                     </form>
+
+                    {/* Link para registrarse */}
+                    <div className="mt-6 text-center">
+                        <p className="text-sm text-gray-600">
+                            ¿No tienes una cuenta?{' '}
+                            <Link 
+                                to="/register" 
+                                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                            >
+                                Regístrate aquí
+                            </Link>
+                        </p>
+                    </div>
+
+                    {/* Botón de desbloqueo (solo en desarrollo) */}
+                    {isLocked && import.meta.env.DEV && (
+                        <div className="mt-4 text-center">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    authService.loginAttempts.reset(credentials.email);
+                                    window.location.reload();
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-700 underline"
+                            >
+                                [DEV] Desbloquear cuenta
+                            </button>
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <div className="mt-6 text-center">

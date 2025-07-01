@@ -165,28 +165,47 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Función para registrar un nuevo usuario.
-   * Crea la cuenta y envía email de confirmación si está configurado.
+   * Crea la cuenta en Supabase Auth con metadata que será usado por el trigger
+   * de base de datos para crear automáticamente el perfil.
    */
   const signUp = async (email, password, userData = {}) => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.auth.signUp({
+      console.log('🚀 Iniciando registro con datos:', { email, userData });
+      
+      // Crear usuario en Supabase Auth con metadata
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: userData // Datos adicionales del usuario (nombre, empresa, etc.)
+          data: {
+            // Datos que serán guardados en raw_user_meta_data
+            // y usados por el trigger de base de datos
+            nombre: userData.nombre || '',
+            organizacion: userData.organizacion || null,
+            empresa: userData.organizacion || null, // Alias para compatibilidad
+          }
         }
       });
 
-      if (error) {
-        throw new Error(error.message);
+      if (authError) {
+        throw new Error(authError.message);
       }
 
-      return { success: true, data };
+      console.log('✅ Usuario creado en Supabase Auth:', {
+        id: authData.user?.id,
+        email: authData.user?.email,
+        metadata: authData.user?.user_metadata
+      });
+
+      // El perfil se creará automáticamente por el trigger de base de datos
+      // No necesitamos hacer llamadas adicionales a la API
+
+      return { success: true, data: authData };
       
     } catch (error) {
-      console.error('Error en registro:', error);
+      console.error('❌ Error en registro:', error);
       return { 
         success: false, 
         error: error.message || 'Error desconocido en registro' 

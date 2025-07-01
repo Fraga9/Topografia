@@ -218,42 +218,93 @@ export const authService = {
   },
 
   /**
-   * Gestiona intentos de login fallidos
+   * Gestiona intentos de login fallidos por usuario específico
    */
   loginAttempts: {
-    key: 'topografia_login_attempts',
+    keyPrefix: 'topografia_login_attempts_',
     maxAttempts: 5,
     lockoutDuration: 15 * 60 * 1000, // 15 minutos
     
-    get: () => {
+    getKey: (email) => {
+      // Crear una clave específica para cada email
+      return `${authService.loginAttempts.keyPrefix}${btoa(email.toLowerCase())}`;
+    },
+    
+    get: (email) => {
+      if (!email) return { count: 0, lastAttempt: null };
+      
       try {
-        const stored = localStorage.getItem(authService.loginAttempts.key);
+        const key = authService.loginAttempts.getKey(email);
+        const stored = localStorage.getItem(key);
         return stored ? JSON.parse(stored) : { count: 0, lastAttempt: null };
       } catch {
         return { count: 0, lastAttempt: null };
       }
     },
     
-    increment: () => {
-      const attempts = authService.loginAttempts.get();
+    increment: (email) => {
+      if (!email) return { count: 0, lastAttempt: null };
+      
+      const attempts = authService.loginAttempts.get(email);
       attempts.count += 1;
       attempts.lastAttempt = Date.now();
       
-      localStorage.setItem(authService.loginAttempts.key, JSON.stringify(attempts));
+      const key = authService.loginAttempts.getKey(email);
+      localStorage.setItem(key, JSON.stringify(attempts));
       return attempts;
     },
     
-    reset: () => {
-      localStorage.removeItem(authService.loginAttempts.key);
+    reset: (email) => {
+      if (!email) return;
+      
+      const key = authService.loginAttempts.getKey(email);
+      localStorage.removeItem(key);
     },
     
-    isLocked: () => {
-      const attempts = authService.loginAttempts.get();
+    isLocked: (email) => {
+      if (!email) return false;
+      
+      const attempts = authService.loginAttempts.get(email);
       if (attempts.count < authService.loginAttempts.maxAttempts) return false;
       
       const timeSinceLastAttempt = Date.now() - attempts.lastAttempt;
       return timeSinceLastAttempt < authService.loginAttempts.lockoutDuration;
+    },
+    
+    getRemainingLockTime: (email) => {
+      if (!email) return 0;
+      
+      const attempts = authService.loginAttempts.get(email);
+      if (attempts.count < authService.loginAttempts.maxAttempts) return 0;
+      
+      const timeSinceLastAttempt = Date.now() - attempts.lastAttempt;
+      const remainingTime = authService.loginAttempts.lockoutDuration - timeSinceLastAttempt;
+      
+      return Math.max(0, remainingTime);
+    },
+    
+    // Función para limpiar todos los bloqueos (útil para debugging)
+    clearAll: () => {
+      const keys = Object.keys(localStorage).filter(key => 
+        key.startsWith(authService.loginAttempts.keyPrefix)
+      );
+      keys.forEach(key => localStorage.removeItem(key));
     }
+  },
+
+  /**
+   * Formatea el tiempo de bloqueo restante en un formato legible
+   */
+  formatLockoutTime: (remainingTime) => {
+    if (remainingTime <= 0) return '0 segundos';
+    
+    const minutes = Math.floor(remainingTime / (60 * 1000));
+    const seconds = Math.floor((remainingTime % (60 * 1000)) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
   },
 
   /**
