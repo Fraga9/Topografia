@@ -398,11 +398,19 @@ const Campo = () => {
     const rango = maxElev - minElev || 1; // Evitar división por cero
 
     return (
-      <div className="bg-white p-3 lg:p-6 rounded-lg border">
+      <div className="bg-white p-3 lg:p-6 rounded-lg">
         <h3 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Perfil de Terreno - KM {formatearKM(estacionSeleccionada?.km)}</h3>
         
-        <div className="relative h-48 lg:h-64 border border-gray-200 rounded bg-gray-50">
+        <div className="relative h-48 lg:h-64 rounded bg-gray-50">
           <svg width="100%" height="100%" className="absolute inset-0">
+            {/* Grid de referencia */}
+            <defs>
+              <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+            
             {/* Líneas de elevación */}
             {datosValidos.map((punto, index) => {
               const x = (index / (datosValidos.length - 1)) * 90 + 5; // 5% margen
@@ -1184,13 +1192,16 @@ const Campo = () => {
                 </div>
               )}
               
-              <table className="w-full min-w-[600px]">
+              <table className="w-full min-w-[1000px]">
                 <thead className="bg-blue-600 text-white">
                   <tr>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-semibold text-xs lg:text-sm">ESTACION</th>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">+</th>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">Altura de Aparato</th>
-                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">-</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm">Lectura Mira</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm bg-blue-500">Elv. Real</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm bg-blue-500">Elv. Teórica</th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-semibold text-xs lg:text-sm bg-blue-500">Elv. Concreto</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1201,9 +1212,15 @@ const Campo = () => {
                       {formatNumber(medicionActiva.altura_aparato, 3)}
                     </td>
                     <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">-</td>
+                    <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm font-medium text-green-600">{formatNumber(medicionActiva.bn_altura, 3)}</td>
+                    <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">-</td>
+                    <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">-</td>
                   </tr>
                   <tr>
                     <td className="px-2 lg:px-4 py-2 font-medium text-xs lg:text-sm">{formatearKM(estacionSeleccionada.km)}</td>
+                    <td className="px-2 lg:px-4 py-2"></td>
+                    <td className="px-2 lg:px-4 py-2"></td>
+                    <td className="px-2 lg:px-4 py-2"></td>
                     <td className="px-2 lg:px-4 py-2"></td>
                     <td className="px-2 lg:px-4 py-2"></td>
                     <td className="px-2 lg:px-4 py-2"></td>
@@ -1287,6 +1304,28 @@ const Campo = () => {
                             }`}
                             placeholder="0.000"
                           />
+                        </td>
+                        {/* Columnas de elevaciones calculadas */}
+                        <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">
+                          <span className={`font-medium ${
+                            lecturaObj?.elv_base_real ? 'text-blue-600' : 'text-gray-400'
+                          }`}>
+                            {lecturaObj?.elv_base_real ? formatNumber(lecturaObj.elv_base_real, 3) : '-'}
+                          </span>
+                        </td>
+                        <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">
+                          <span className={`font-medium ${
+                            lecturaObj?.elv_base_proyecto ? 'text-indigo-600' : 'text-gray-400'
+                          }`}>
+                            {lecturaObj?.elv_base_proyecto ? formatNumber(lecturaObj.elv_base_proyecto, 3) : '-'}
+                          </span>
+                        </td>
+                        <td className="px-2 lg:px-4 py-2 text-center text-xs lg:text-sm">
+                          <span className={`font-medium ${
+                            lecturaObj?.elv_concreto_proyecto ? 'text-green-600' : 'text-gray-400'
+                          }`}>
+                            {lecturaObj?.elv_concreto_proyecto ? formatNumber(lecturaObj.elv_concreto_proyecto, 3) : '-'}
+                          </span>
                         </td>
                       </tr>
                     );
