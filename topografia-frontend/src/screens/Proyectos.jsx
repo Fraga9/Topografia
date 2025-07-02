@@ -9,7 +9,7 @@ import {
 import { useProyectoSeleccionado } from '../context/ProyectoContext';
 import { formatDate } from '../utils/formatters';
 import { validators } from '../utils/validators';
-import { Plus, Search, CheckCircle, AlertCircle, MapPin, Calculator, Settings, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Search, CheckCircle, AlertCircle, MapPin, Calculator, Settings, X, ArrowLeft, ArrowRight, Users } from 'lucide-react';
 import ProyectoCard from '../components/ProyectoCard';
 
 // Componente FormField fuera del componente principal para evitar re-creaciones
@@ -123,6 +123,12 @@ const Proyectos = () => {
     tolerancia_sct: "0.005",
     divisiones_izquierdas: [-12.21, -10.7, -9, -6, -3, -1.3, 0],
     divisiones_derechas: [1.3, 3, 6, 9, 10.7, 12.21],
+    encargados: [
+      { nombre: "", puesto: "Topógrafo Principal" },
+      { nombre: "", puesto: "Topógrafo de Campo" },
+      { nombre: "", puesto: "Ayudante de Topógrafo" },
+      { nombre: "", puesto: "Supervisor de Calidad" }
+    ],
   });
 
   // Filtrar proyectos según búsqueda
@@ -246,6 +252,9 @@ const Proyectos = () => {
         intervalo: parseFloat(newProject.intervalo),
         espesor: parseFloat(newProject.espesor),
         tolerancia_sct: parseFloat(newProject.tolerancia_sct),
+        divisiones_izquierdas: newProject.divisiones_izquierdas,
+        divisiones_derechas: newProject.divisiones_derechas,
+        encargados: newProject.encargados.filter(enc => enc.nombre.trim() || enc.puesto.trim()), // Solo incluir encargados con datos
         generar_estaciones: true  // Para el endpoint completo
       };
 
@@ -353,6 +362,29 @@ const Proyectos = () => {
     setNewProject(prev => ({
       ...prev,
       [tipo]: prev[tipo].filter((_, i) => i !== index)
+    }));
+  }, []);
+
+  // Handlers para encargados
+  const handleEncargadoChange = useCallback((index, field, value) => {
+    setNewProject(prev => {
+      const newEncargados = [...prev.encargados];
+      newEncargados[index] = { ...newEncargados[index], [field]: value };
+      return { ...prev, encargados: newEncargados };
+    });
+  }, []);
+
+  const handleAddEncargado = useCallback(() => {
+    setNewProject(prev => ({
+      ...prev,
+      encargados: [...prev.encargados, { nombre: "", puesto: "" }]
+    }));
+  }, []);
+
+  const handleRemoveEncargado = useCallback((index) => {
+    setNewProject(prev => ({
+      ...prev,
+      encargados: prev.encargados.filter((_, i) => i !== index)
     }));
   }, []);
 
@@ -599,6 +631,68 @@ const Proyectos = () => {
                     onRemoveDivision={handleRemoveDivision}
                     icono={<ArrowRight className="w-4 h-4 text-orange-600" />}
                   />
+                </div>
+
+                {/* Encargados del Proyecto */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 mt-6 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-600" />
+                    Encargados del Proyecto
+                  </h3>
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="space-y-3">
+                      {newProject.encargados.map((encargado, index) => (
+                        <div key={index} className="flex gap-3 items-center bg-white rounded-lg p-3">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={encargado.nombre}
+                              onChange={(e) => handleEncargadoChange(index, 'nombre', e.target.value)}
+                              placeholder="Nombre completo"
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={encargado.puesto}
+                              onChange={(e) => handleEncargadoChange(index, 'puesto', e.target.value)}
+                              placeholder="Puesto/Cargo"
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          {newProject.encargados.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEncargado(index)}
+                              className="text-red-600 hover:text-red-800 p-1"
+                              title="Eliminar encargado"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {newProject.encargados.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={handleAddEncargado}
+                        className="mt-3 w-full border border-dashed border-gray-300 rounded-lg py-2 text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Agregar Encargado
+                      </button>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 mt-2">
+                      Define quiénes son los responsables del proyecto. Típicamente se incluyen topógrafos, supervisores y personal técnico.
+                    </p>
+                  </div>
                 </div>
               </div>
 

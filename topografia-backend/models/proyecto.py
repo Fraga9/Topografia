@@ -23,6 +23,7 @@ class Proyecto(Base):
     tolerancia_sct = Column(DECIMAL(8, 6), nullable=False, default=0.005)
     divisiones_izquierdas = Column(JSONB, nullable=True)
     divisiones_derechas = Column(JSONB, nullable=True)
+    encargados = Column(JSONB, nullable=True)
     # ✅ Campos generados por PostgreSQL - no se incluyen en INSERT
     total_estaciones = Column(Integer, Computed("ceil(((km_final - km_inicial) / intervalo))"), nullable=True)
     longitud_proyecto = Column(DECIMAL(10, 3), Computed("(km_final - km_inicial)"), nullable=True)

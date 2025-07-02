@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useProyecto } from '../hooks/useProyecto';
 import { useUpdateProyecto } from '../hooks/proyectos/useProyectos';
 import { formatNumber } from '../utils/formatters';
+import { Users, Plus, X, Edit, Trash2 } from 'lucide-react';
 
 const Configuracion = () => {
   const [guardando, setGuardando] = useState(false);
@@ -24,7 +25,8 @@ const Configuracion = () => {
     espesor: '',
     tolerancia_sct: '',
     divisiones_izquierdas: [],
-    divisiones_derechas: []
+    divisiones_derechas: [],
+    encargados: []
   });
 
   // Estados para campos calculados (solo lectura)
@@ -46,7 +48,8 @@ const Configuracion = () => {
         espesor: proyecto.espesor || '',
         tolerancia_sct: proyecto.tolerancia_sct || '',
         divisiones_izquierdas: proyecto.divisiones_izquierdas || [],
-        divisiones_derechas: proyecto.divisiones_derechas || []
+        divisiones_derechas: proyecto.divisiones_derechas || [],
+        encargados: proyecto.encargados || []
       });
       setCambiosPendientes(false);
     }
@@ -84,7 +87,8 @@ const Configuracion = () => {
         parseFloat(configuracion.espesor) !== proyecto.espesor ||
         parseFloat(configuracion.tolerancia_sct) !== proyecto.tolerancia_sct ||
         JSON.stringify(configuracion.divisiones_izquierdas) !== JSON.stringify(proyecto.divisiones_izquierdas) ||
-        JSON.stringify(configuracion.divisiones_derechas) !== JSON.stringify(proyecto.divisiones_derechas);
+        JSON.stringify(configuracion.divisiones_derechas) !== JSON.stringify(proyecto.divisiones_derechas) ||
+        JSON.stringify(configuracion.encargados) !== JSON.stringify(proyecto.encargados || []);
 
       setCambiosPendientes(hayDiferencias);
     }
@@ -127,6 +131,25 @@ const Configuracion = () => {
     }
   };
 
+  // Funciones para manejar encargados
+  const handleEncargadoChange = (index, field, value) => {
+    const nuevosEncargados = [...configuracion.encargados];
+    nuevosEncargados[index] = { ...nuevosEncargados[index], [field]: value };
+    handleInputChange('encargados', nuevosEncargados);
+  };
+
+  const agregarEncargado = () => {
+    const nuevosEncargados = [...configuracion.encargados, { nombre: '', puesto: '' }];
+    handleInputChange('encargados', nuevosEncargados);
+  };
+
+  const eliminarEncargado = (index) => {
+    if (confirm('¿Está seguro de eliminar este encargado?')) {
+      const nuevosEncargados = configuracion.encargados.filter((_, i) => i !== index);
+      handleInputChange('encargados', nuevosEncargados);
+    }
+  };
+
   // Guardar cambios
   const handleGuardar = async () => {
     if (!proyecto || !cambiosPendientes) return;
@@ -143,7 +166,8 @@ const Configuracion = () => {
         espesor: parseFloat(configuracion.espesor),
         tolerancia_sct: parseFloat(configuracion.tolerancia_sct),
         divisiones_izquierdas: configuracion.divisiones_izquierdas,
-        divisiones_derechas: configuracion.divisiones_derechas
+        divisiones_derechas: configuracion.divisiones_derechas,
+        encargados: configuracion.encargados.filter(enc => enc.nombre.trim() || enc.puesto.trim())
       };
 
       await updateProyecto.mutateAsync({
@@ -175,7 +199,8 @@ const Configuracion = () => {
           espesor: proyecto.espesor || '',
           tolerancia_sct: proyecto.tolerancia_sct || '',
           divisiones_izquierdas: proyecto.divisiones_izquierdas || [],
-          divisiones_derechas: proyecto.divisiones_derechas || []
+          divisiones_derechas: proyecto.divisiones_derechas || [],
+          encargados: proyecto.encargados || []
         });
       }
     }
@@ -499,6 +524,93 @@ const Configuracion = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Encargados del Proyecto */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Users className="w-5 h-5 text-purple-600" />
+            Encargados del Proyecto
+          </h3>
+          <button
+            onClick={agregarEncargado}
+            disabled={configuracion.encargados.length >= 10}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Encargado
+          </button>
+        </div>
+        
+        <div className="space-y-3">
+          {configuracion.encargados.length > 0 ? (
+            configuracion.encargados.map((encargado, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre Completo
+                  </label>
+                  <input
+                    type="text"
+                    value={encargado.nombre || ''}
+                    onChange={(e) => handleEncargadoChange(index, 'nombre', e.target.value)}
+                    placeholder="Ej: Juan Carlos Pérez García"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Puesto/Cargo
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={encargado.puesto || ''}
+                      onChange={(e) => handleEncargadoChange(index, 'puesto', e.target.value)}
+                      placeholder="Ej: Topógrafo Principal"
+                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={() => eliminarEncargado(index)}
+                      className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-md transition-colors"
+                      title="Eliminar encargado"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">No hay encargados asignados al proyecto</p>
+              <button
+                onClick={agregarEncargado}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 mx-auto"
+              >
+                <Plus className="w-4 h-4" />
+                Agregar Primer Encargado
+              </button>
+            </div>
+          )}
+        </div>
+
+        {configuracion.encargados.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Total de encargados:</strong> {configuracion.encargados.length} 
+              {configuracion.encargados.length >= 10 && (
+                <span className="text-orange-600 ml-2">(Máximo alcanzado)</span>
+              )}
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Define quiénes son los responsables técnicos del proyecto. Estos nombres aparecerán en los reportes oficiales.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Vista Previa de Divisiones */}

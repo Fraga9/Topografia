@@ -1,9 +1,26 @@
 # schemas/proyecto.py
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 import uuid
+
+# Schema para encargados del proyecto
+class Encargado(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=100, description="Nombre del encargado")
+    puesto: str = Field(..., min_length=1, max_length=50, description="Puesto del encargado")
+
+    @validator('nombre')
+    def validate_nombre(cls, v):
+        if not v.strip():
+            raise ValueError('El nombre no puede estar vacío')
+        return v.strip()
+
+    @validator('puesto')
+    def validate_puesto(cls, v):
+        if not v.strip():
+            raise ValueError('El puesto no puede estar vacío')
+        return v.strip()
 
 # Schema base para campos comunes
 class ProyectoBase(BaseModel):
@@ -23,6 +40,15 @@ class ProyectoBase(BaseModel):
         default=[1.3, 3, 6, 9, 10.7, 12.21],
         description="Divisiones transversales lado derecho"
     )
+    encargados: Optional[List[Encargado]] = Field(
+        default=[
+            {"nombre": "", "puesto": "Topógrafo Principal"},
+            {"nombre": "", "puesto": "Topógrafo de Campo"},
+            {"nombre": "", "puesto": "Ayudante de Topógrafo"},
+            {"nombre": "", "puesto": "Supervisor de Calidad"}
+        ],
+        description="Lista de encargados del proyecto con sus puestos"
+    )
 
     @validator('km_final')
     def validate_km_range(cls, v, values):
@@ -34,6 +60,17 @@ class ProyectoBase(BaseModel):
     def validate_intervalo(cls, v):
         if v <= 0:
             raise ValueError('El intervalo debe ser mayor que 0')
+        return v
+
+    @validator('encargados')
+    def validate_encargados(cls, v):
+        if v is not None:
+            if len(v) > 10:
+                raise ValueError('No se pueden asignar más de 10 encargados por proyecto')
+            # Validar que no haya duplicados de nombre
+            nombres = [enc.nombre.strip().lower() for enc in v if enc.nombre.strip()]
+            if len(nombres) != len(set(nombres)):
+                raise ValueError('No se pueden tener encargados con el mismo nombre')
         return v
 
 # Schema para crear proyecto
@@ -52,6 +89,7 @@ class ProyectoUpdate(BaseModel):
     tolerancia_sct: Optional[Decimal] = None
     divisiones_izquierdas: Optional[List[float]] = None
     divisiones_derechas: Optional[List[float]] = None
+    encargados: Optional[List[Encargado]] = None
     estado: Optional[str] = Field(None, max_length=20)
 
 # ✅ NUEVO: Schema completo con TODOS los campos para frontend
@@ -74,6 +112,12 @@ class ProyectoCompleto(BaseModel):
     # ✅ ARRAYS JSONB
     divisiones_izquierdas: List[float] = [-12.21, -10.7, -9, -6, -3, -1.3, 0]
     divisiones_derechas: List[float] = [1.3, 3, 6, 9, 10.7, 12.21]
+    encargados: List[Dict[str, str]] = [
+        {"nombre": "", "puesto": "Topógrafo Principal"},
+        {"nombre": "", "puesto": "Topógrafo de Campo"},
+        {"nombre": "", "puesto": "Ayudante de Topógrafo"},
+        {"nombre": "", "puesto": "Supervisor de Calidad"}
+    ]
     # ✅ METADATA
     fecha_creacion: datetime
     fecha_modificacion: datetime
