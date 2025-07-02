@@ -2,7 +2,8 @@ import React from 'react';
 import {
   Construction, // MapPin, AlertCircle, Clock, ChevronRight, Zap removed as they are no longer used directly or conditionally
   TrendingUp, // Kept for the header icon, though status icons are removed
-  CheckCircle2 // Kept for potential future use, though status icons are removed
+  CheckCircle2, // Kept for potential future use, though status icons are removed
+  Trash2 // For delete button
 } from 'lucide-react';
 
 const ProyectoCard = ({
@@ -102,14 +103,33 @@ const ProyectoCard = ({
         >
           <TrendingUp className={`w-7 h-7 ${esSeleccionado ? 'text-white' : 'text-blue-600'}`} />
         </div>
-        <div
-          className={`
-            flex items-center px-3 py-1 rounded-full
-            ${estadoConfig.bgClass}
-          `}
-        >
-          {/* Icon removed from here */}
-          <span className={`text-xs font-semibold ${estadoConfig.textClass}`}>{estadoConfig.label}</span>
+        <div className="flex items-center gap-2">
+          <div
+            className={`
+              flex items-center px-3 py-1 rounded-full
+              ${estadoConfig.bgClass}
+            `}
+          >
+            {/* Icon removed from here */}
+            <span className={`text-xs font-semibold ${estadoConfig.textClass}`}>{estadoConfig.label}</span>
+          </div>
+          {/* Botón de eliminación */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEliminar(proyecto.id);
+            }}
+            className={`
+              p-2 rounded-lg transition-all duration-200 hover:scale-110
+              ${esSeleccionado 
+                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-200 hover:text-white' 
+                : 'bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 border border-red-200'
+              }
+            `}
+            title="Eliminar proyecto"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

@@ -1,94 +1,117 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  useMisProyectos,  // ← CAMBIO CLAVE: Usar el hook que consulta la vista mis_proyectos
+  useMisProyectos,
   useCreateProyectoCompleto, 
   useUpdateProyecto, 
   useDeleteProyecto 
 } from '../hooks/proyectos';
 import { useProyectoSeleccionado } from '../context/ProyectoContext';
 import { formatDate } from '../utils/formatters';
-import { Plus, Search, CheckCircle } from 'lucide-react';
+import { validators } from '../utils/validators';
+import { Plus, Search, CheckCircle, AlertCircle, MapPin, Calculator, Settings, X, ArrowLeft, ArrowRight } from 'lucide-react';
 import ProyectoCard from '../components/ProyectoCard';
 
+// Componente FormField fuera del componente principal para evitar re-creaciones
+const FormField = React.memo(({ label, children, error, required = false }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    {children}
+    {error && (
+      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+        <AlertCircle className="w-4 h-4" />
+        {error}
+      </p>
+    )}
+  </div>
+));
+
+FormField.displayName = 'FormField';
+
+// Componente para las divisiones transversales
+const DivisionesTransversales = React.memo(({ 
+  titulo, 
+  divisiones, 
+  tipo, 
+  onDivisionChange, 
+  onAddDivision, 
+  onRemoveDivision,
+  icono 
+}) => (
+  <div className="bg-gray-50 rounded-lg p-4">
+    <div className="flex items-center justify-between mb-3">
+      <h4 className="text-md font-medium text-gray-900 flex items-center gap-2">
+        {icono}
+        {titulo}
+      </h4>
+      <button
+        type="button"
+        onClick={() => onAddDivision(tipo)}
+        className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-full transition-colors"
+        title="Agregar división"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+      {divisiones.map((division, index) => (
+        <div key={index} className="relative">
+          <input
+            type="number"
+            step="0.01"
+            value={division}
+            onChange={(e) => onDivisionChange(tipo, index, e.target.value)}
+            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+            placeholder="0.00"
+          />
+          {divisiones.length > 1 && (
+            <button
+              type="button"
+              onClick={() => onRemoveDivision(tipo, index)}
+              className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs transition-colors"
+              title="Eliminar división"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+    <p className="text-xs text-gray-500 mt-2">
+      {tipo === 'divisiones_izquierdas' 
+        ? 'Valores negativos representan distancias hacia la izquierda del eje central' 
+        : 'Valores positivos representan distancias hacia la derecha del eje central'
+      }
+    </p>
+  </div>
+));
+
+DivisionesTransversales.displayName = 'DivisionesTransversales';
 
 const Proyectos = () => {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [proyectoEditando, setProyectoEditando] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [formErrors, setFormErrors] = useState({});
   const navigate = useNavigate();
 
   // Context del proyecto seleccionado
   const { proyectoSeleccionado, seleccionarProyecto } = useProyectoSeleccionado();
 
-  // 🔧 CAMBIO PRINCIPAL: Usar el hook que consulta la vista mis_proyectos
-  // Esta vista incluye todos los campos calculados que necesitamos
+  // Obtener proyectos reales del usuario
   const { 
-    data: proyectosOriginales, // Renamed to avoid conflict
+    data: proyectos, 
     isLoading, 
-    error 
-  } = useMisProyectos(); // ← Este hook debe consultar la vista mis_proyectos
+    error,
+    refetch 
+  } = useMisProyectos();
   
   const createProyectoCompleto = useCreateProyectoCompleto();
   const updateProyecto = useUpdateProyecto();
   const deleteProyecto = useDeleteProyecto();
 
-  // --- Hardcoded projects for testing ---
-  const hardcodedProyectos = [
-    {
-      id: 'hc-proj-1',
-      nombre: "Demo: Carretera del Desierto",
-      tramo: "Sección Oasis",
-      cuerpo: "A",
-      km_inicial: 100000,
-      km_final: 125000,
-      estado: "EN_PROGRESO",
-      estaciones_configuradas: 250,
-      estaciones_medidas: 50,
-      total_lecturas: 200,
-      // Add any other fields expected by ProyectoCard or selection logic
-      // For example, if 'fecha_creacion' is used for sorting or display:
-      fecha_creacion: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
-    },
-    {
-      id: 'hc-proj-2',
-      nombre: "Demo: Puente Colgante",
-      tramo: "Valle Profundo",
-      cuerpo: "Unico",
-      km_inicial: 5000,
-      km_final: 5500,
-      estado: "CONFIGURACIÓN", // To test glassmorphism
-      estaciones_configuradas: 50,
-      estaciones_medidas: 0,
-      total_lecturas: 0,
-      fecha_creacion: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    },
-    {
-      id: 'hc-proj-3',
-      nombre: "Demo: Túnel Montañoso",
-      tramo: "Paso Cumbres",
-      cuerpo: "B",
-      km_inicial: 75000,
-      km_final: 78000,
-      estado: "PAUSADO",
-      estaciones_configuradas: 30,
-      estaciones_medidas: 10,
-      total_lecturas: 40,
-      fecha_creacion: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-    },
-  ];
-
-  // Combine fetched projects with hardcoded ones
-  // Ensure hardcoded ones don't clash with real IDs if they could be similar
-  // For demo, we can just prepend or append. Prepending might be more visible.
-  const proyectos = React.useMemo(() => {
-    const hcIds = new Set(hardcodedProyectos.map(p => p.id));
-    const filteredOriginales = proyectosOriginales?.filter(p => !hcIds.has(p.id)) || [];
-    return [...hardcodedProyectos, ...filteredOriginales];
-  }, [proyectosOriginales]);
-  // --- End of hardcoded projects section ---
-
-
+  // Estado del formulario mejorado
   const [newProject, setNewProject] = useState({
     nombre: "",
     tramo: "",
@@ -98,40 +121,155 @@ const Proyectos = () => {
     intervalo: "5",
     espesor: "0.25",
     tolerancia_sct: "0.005",
+    divisiones_izquierdas: [-12.21, -10.7, -9, -6, -3, -1.3, 0],
+    divisiones_derechas: [1.3, 3, 6, 9, 10.7, 12.21],
   });
 
   // Filtrar proyectos según búsqueda
-  const proyectosFiltrados = proyectos?.filter(
-    (proyecto) =>
+  const proyectosFiltrados = useMemo(() => {
+    if (!proyectos) return [];
+    
+    return proyectos.filter((proyecto) =>
       proyecto.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      proyecto.tramo?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+      proyecto.tramo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      proyecto.cuerpo?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [proyectos, searchTerm]);
 
-  // 🔍 DEBUG: Ver qué datos estamos recibiendo
-  React.useEffect(() => {
-    if (proyectos && proyectos.length > 0) {
-      console.log('📊 Datos de proyectos (combinados) para la lista:', proyectos);
-      // console.log('Campos disponibles en el primer proyecto combinado:', Object.keys(proyectos[0]));
+  // Validación completa del formulario
+  const validateForm = useCallback(() => {
+    const errors = {};
+
+    // Validar nombre
+    const nombreValidation = validators.proyecto.nombre(newProject.nombre);
+    if (!nombreValidation.valid) {
+      errors.nombre = nombreValidation.message;
     }
-  }, [proyectos]);
 
-  const handleCreateProject = async () => {
+    // Validar tramo
+    if (!newProject.tramo.trim()) {
+      errors.tramo = 'El tramo es requerido';
+    } else if (newProject.tramo.trim().length < 2) {
+      errors.tramo = 'El tramo debe tener al menos 2 caracteres';
+    }
+
+    // Validar kilómetros
+    const kmInicial = parseFloat(newProject.km_inicial);
+    const kmFinal = parseFloat(newProject.km_final);
+    
+    if (!newProject.km_inicial || isNaN(kmInicial) || kmInicial < 0) {
+      errors.km_inicial = 'KM inicial es requerido y debe ser un número válido (≥ 0)';
+    } else if (!newProject.km_final || isNaN(kmFinal) || kmFinal < 0) {
+      errors.km_final = 'KM final es requerido y debe ser un número válido (≥ 0)';
+    } else {
+      const kmValidation = validators.proyecto.kilometros(kmInicial, kmFinal);
+      if (!kmValidation.valid) {
+        errors.kilometros = kmValidation.message;
+      }
+      
+      // Validar que la diferencia no sea demasiado grande
+      const longitud = kmFinal - kmInicial;
+      if (longitud > 100000) { // Máximo 100km
+        errors.kilometros = 'La longitud del proyecto no puede exceder 100 km';
+      }
+    }
+
+    // Validar intervalo
+    const intervalo = parseFloat(newProject.intervalo);
+    if (isNaN(intervalo)) {
+      errors.intervalo = 'El intervalo debe ser un número válido';
+    } else {
+      const intervaloValidation = validators.configuracion.intervalo(intervalo);
+      if (!intervaloValidation.valid) {
+        errors.intervalo = intervaloValidation.message;
+      }
+    }
+
+    // Validar espesor
+    const espesor = parseFloat(newProject.espesor);
+    if (isNaN(espesor)) {
+      errors.espesor = 'El espesor debe ser un número válido';
+    } else {
+      const espesorValidation = validators.configuracion.espesor(espesor);
+      if (!espesorValidation.valid) {
+        errors.espesor = espesorValidation.message;
+      }
+    }
+
+    // Validar tolerancia SCT
+    const tolerancia = parseFloat(newProject.tolerancia_sct);
+    if (isNaN(tolerancia)) {
+      errors.tolerancia_sct = 'La tolerancia SCT debe ser un número válido';
+    } else {
+      const toleranciaValidation = validators.configuracion.toleranciaSCT(tolerancia);
+      if (!toleranciaValidation.valid) {
+        errors.tolerancia_sct = toleranciaValidation.message;
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [newProject]);
+
+  // Calcular estadísticas del formulario
+  const projectStats = useMemo(() => {
+    const kmInicial = parseFloat(newProject.km_inicial);
+    const kmFinal = parseFloat(newProject.km_final);
+    const intervalo = parseFloat(newProject.intervalo);
+
+    if (isNaN(kmInicial) || isNaN(kmFinal) || isNaN(intervalo) || kmFinal <= kmInicial) {
+      return null;
+    }
+
+    const longitud = kmFinal - kmInicial;
+    const totalEstaciones = Math.floor(longitud / intervalo) + 1;
+
+    return {
+      longitud: longitud.toLocaleString(), // Formatear con comas
+      totalEstaciones: totalEstaciones.toLocaleString(),
+      intervalos: (totalEstaciones - 1).toLocaleString()
+    };
+  }, [newProject.km_inicial, newProject.km_final, newProject.intervalo]);
+
+  const handleCreateProject = useCallback(async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       const proyectoData = {
-        p_nombre: newProject.nombre,
-        p_tramo: newProject.tramo,
-        p_cuerpo: newProject.cuerpo,
-        p_km_inicial: parseFloat(newProject.km_inicial),
-        p_km_final: parseFloat(newProject.km_final),
-        p_intervalo: parseFloat(newProject.intervalo),
-        p_espesor: parseFloat(newProject.espesor),
-        p_tolerancia_sct: parseFloat(newProject.tolerancia_sct)
+        nombre: newProject.nombre.trim(),
+        tramo: newProject.tramo.trim(),
+        cuerpo: newProject.cuerpo,
+        km_inicial: parseFloat(newProject.km_inicial),  // Backend espera Decimal (float)
+        km_final: parseFloat(newProject.km_final),      // Backend espera Decimal (float)
+        intervalo: parseFloat(newProject.intervalo),
+        espesor: parseFloat(newProject.espesor),
+        tolerancia_sct: parseFloat(newProject.tolerancia_sct),
+        generar_estaciones: true  // Para el endpoint completo
       };
+
+      // Validar que los datos estén completos antes de enviar
+      console.log('📊 Datos a enviar al endpoint /proyectos/completo/:', proyectoData);
+      
+      // Verificar que no haya NaN
+      if (isNaN(proyectoData.km_inicial) || isNaN(proyectoData.km_final) || 
+          isNaN(proyectoData.intervalo) || isNaN(proyectoData.espesor) || 
+          isNaN(proyectoData.tolerancia_sct)) {
+        throw new Error('Todos los campos numéricos deben tener valores válidos');
+      }
+
+      // Verificar campos requeridos
+      if (!proyectoData.nombre || !proyectoData.tramo) {
+        throw new Error('Nombre y tramo son requeridos');
+      }
 
       const nuevoProyecto = await createProyectoCompleto.mutateAsync(proyectoData);
       
+      // Seleccionar el nuevo proyecto
       seleccionarProyecto(nuevoProyecto);
       
+      // Limpiar formulario
       setMostrarFormulario(false);
       setNewProject({
         nombre: "",
@@ -142,22 +280,88 @@ const Proyectos = () => {
         intervalo: "5",
         espesor: "0.25",
         tolerancia_sct: "0.005",
+        divisiones_izquierdas: [-12.21, -10.7, -9, -6, -3, -1.3, 0],
+        divisiones_derechas: [1.3, 3, 6, 9, 10.7, 12.21],
       });
+      setFormErrors({});
 
+      // Navegar al dashboard
       navigate('/dashboard');
     } catch (error) {
       console.error('Error creando proyecto:', error);
-      alert('Error al crear el proyecto: ' + (error.message || 'Error desconocido'));
+      
+      let errorMessage = 'Error al crear el proyecto. Verifica los datos e intenta nuevamente.';
+      
+      // Manejar errores de validación del backend (422)
+      if (error.status === 422 || error.response?.status === 422) {
+        const validationErrors = error.response?.data?.detail || error.message;
+        
+        if (Array.isArray(validationErrors)) {
+          // Errores de validación de FastAPI/Pydantic
+          errorMessage = validationErrors.map(err => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+        } else if (typeof validationErrors === 'string') {
+          errorMessage = validationErrors;
+        } else if (typeof validationErrors === 'object') {
+          errorMessage = JSON.stringify(validationErrors);
+        }
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message && typeof error.message === 'string') {
+        errorMessage = error.message;
+      }
+      
+      setFormErrors({
+        general: errorMessage
+      });
     }
-  };
+  }, [validateForm, newProject, createProyectoCompleto, seleccionarProyecto, navigate]);
 
-  const handleSeleccionarProyecto = (proyecto) => {
+  const handleInputChange = useCallback((field, value) => {
+    setNewProject(prev => ({ ...prev, [field]: value }));
+    
+    // Limpiar error específico al escribir
+    setFormErrors(prev => {
+      if (prev[field]) {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      }
+      return prev;
+    });
+  }, []);
+
+  // Función para manejar divisiones transversales
+  const handleDivisionChange = useCallback((tipo, index, value) => {
+    const numericValue = parseFloat(value);
+    if (isNaN(numericValue)) return;
+    
+    setNewProject(prev => {
+      const newDivisiones = [...prev[tipo]];
+      newDivisiones[index] = numericValue;
+      return { ...prev, [tipo]: newDivisiones };
+    });
+  }, []);
+
+  const handleAddDivision = useCallback((tipo) => {
+    setNewProject(prev => ({
+      ...prev,
+      [tipo]: [...prev[tipo], 0]
+    }));
+  }, []);
+
+  const handleRemoveDivision = useCallback((tipo, index) => {
+    setNewProject(prev => ({
+      ...prev,
+      [tipo]: prev[tipo].filter((_, i) => i !== index)
+    }));
+  }, []);
+
+  const handleSeleccionarProyecto = useCallback((proyecto) => {
     seleccionarProyecto(proyecto);
-    // navigate('/dashboard'); // Line removed to prevent redirection
-  };
+  }, [seleccionarProyecto]);
 
-  const handleEliminar = async (proyectoId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este proyecto?')) {
+  const handleEliminar = useCallback(async (proyectoId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.')) {
       try {
         await deleteProyecto.mutateAsync(proyectoId);
         
@@ -166,18 +370,32 @@ const Proyectos = () => {
         }
       } catch (error) {
         console.error('Error al eliminar proyecto:', error);
-        alert('Error al eliminar el proyecto');
+        let errorMessage = 'Error al eliminar el proyecto';
+        
+        if (error.status === 404 || error.response?.status === 404) {
+          errorMessage = 'El proyecto ya no existe o ya fue eliminado';
+        } else if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        alert(errorMessage);
       }
     }
-  };
+  }, [deleteProyecto, proyectoSeleccionado, seleccionarProyecto]);
 
+  // Formulario de creación mejorado
   if (mostrarFormulario) {
     return (
       <div className="p-6">
         <div className="mb-6">
           <button 
-            onClick={() => setMostrarFormulario(false)} 
-            className="text-blue-600 hover:text-blue-800 mb-4"
+            onClick={() => {
+              setMostrarFormulario(false);
+              setFormErrors({});
+            }} 
+            className="text-blue-600 hover:text-blue-800 mb-4 flex items-center gap-2"
           >
             ← Volver a Proyectos
           </button>
@@ -185,122 +403,280 @@ const Proyectos = () => {
           <p className="text-gray-600">Configure los parámetros del nuevo proyecto de carretera</p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 max-w-4xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del Proyecto *</label>
-              <input
-                type="text"
-                value={newProject.nombre}
-                onChange={(e) => setNewProject({ ...newProject, nombre: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ej: San Miguel Allende - Dolores Hidalgo"
-              />
+        {/* Error general */}
+        {formErrors.general && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <p className="text-sm text-red-800">{formErrors.general}</p>
+              </div>
             </div>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tramo *</label>
-              <input
-                type="text"
-                value={newProject.tramo}
-                onChange={(e) => setNewProject({ ...newProject, tramo: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ej: Frente 3"
-              />
-            </div>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Formulario principal */}
+          <div className="xl:col-span-2">
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Información del proyecto */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                    Información del Proyecto
+                  </h3>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Cuerpo *</label>
-              <select
-                value={newProject.cuerpo}
-                onChange={(e) => setNewProject({ ...newProject, cuerpo: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="A">Cuerpo A</option>
-                <option value="B">Cuerpo B</option>
-                <option value="C">Cuerpo C</option>
-              </select>
-            </div>
+                <FormField 
+                  label="Nombre del Proyecto" 
+                  required 
+                  error={formErrors.nombre}
+                >
+                  <input
+                    type="text"
+                    value={newProject.nombre}
+                    onChange={(e) => handleInputChange('nombre', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ej: San Miguel Allende - Dolores Hidalgo"
+                  />
+                </FormField>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">KM Inicial *</label>
-              <input
-                type="number"
-                value={newProject.km_inicial}
-                onChange={(e) => setNewProject({ ...newProject, km_inicial: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="78000"
-              />
-            </div>
+                <FormField 
+                  label="Tramo" 
+                  required 
+                  error={formErrors.tramo}
+                >
+                  <input
+                    type="text"
+                    value={newProject.tramo}
+                    onChange={(e) => handleInputChange('tramo', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ej: Frente 3, Sección Norte"
+                  />
+                </FormField>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">KM Final *</label>
-              <input
-                type="number"
-                value={newProject.km_final}
-                onChange={(e) => setNewProject({ ...newProject, km_final: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="79000"
-              />
-            </div>
+                <FormField 
+                  label="Cuerpo" 
+                  required
+                >
+                  <select
+                    value={newProject.cuerpo}
+                    onChange={(e) => handleInputChange('cuerpo', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="A">Cuerpo A</option>
+                    <option value="B">Cuerpo B</option>
+                    <option value="C">Cuerpo C</option>
+                    <option value="D">Cuerpo D</option>
+                  </select>
+                </FormField>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Intervalo entre estaciones (metros)</label>
-              <input
-                type="number"
-                value={newProject.intervalo}
-                onChange={(e) => setNewProject({ ...newProject, intervalo: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                step="0.1"
-                min="1"
-              />
-            </div>
+                {/* Kilómetros */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 mt-6 flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-green-600" />
+                    Kilometraje
+                  </h3>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Espesor Concreto (m)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={newProject.espesor}
-                onChange={(e) => setNewProject({ ...newProject, espesor: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0.01"
-              />
-            </div>
+                <FormField 
+                  label="KM Inicial" 
+                  required 
+                  error={formErrors.km_inicial || formErrors.kilometros}
+                >
+                  <input
+                    type="number"
+                    value={newProject.km_inicial}
+                    onChange={(e) => handleInputChange('km_inicial', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="78000 (metros)"
+                    step="1"
+                    min="0"
+                  />
+                </FormField>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tolerancia SCT (m)</label>
-              <input
-                type="number"
-                step="0.001"
-                value={newProject.tolerancia_sct}
-                onChange={(e) => setNewProject({ ...newProject, tolerancia_sct: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0.001"
-              />
+                <FormField 
+                  label="KM Final" 
+                  required 
+                  error={formErrors.km_final}
+                >
+                  <input
+                    type="number"
+                    value={newProject.km_final}
+                    onChange={(e) => handleInputChange('km_final', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="79000 (metros)"
+                    step="1"
+                    min="0"
+                  />
+                </FormField>
+
+                {/* Configuración técnica */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 mt-6 flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-purple-600" />
+                    Configuración Técnica
+                  </h3>
+                </div>
+
+                <FormField 
+                  label="Intervalo entre estaciones (metros)" 
+                  error={formErrors.intervalo}
+                >
+                  <select
+                    value={newProject.intervalo}
+                    onChange={(e) => handleInputChange('intervalo', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="2.5">2.5 metros</option>
+                    <option value="5">5 metros (estándar)</option>
+                    <option value="10">10 metros</option>
+                    <option value="15">15 metros</option>
+                    <option value="20">20 metros</option>
+                  </select>
+                </FormField>
+
+                <FormField 
+                  label="Espesor Concreto (metros)" 
+                  error={formErrors.espesor}
+                >
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newProject.espesor}
+                    onChange={(e) => handleInputChange('espesor', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.25"
+                    min="0.01"
+                    max="1.00"
+                  />
+                </FormField>
+
+                <FormField 
+                  label="Tolerancia SCT (metros)" 
+                  error={formErrors.tolerancia_sct}
+                >
+                  <select
+                    value={newProject.tolerancia_sct}
+                    onChange={(e) => handleInputChange('tolerancia_sct', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="0.003">0.003 m (alta precisión)</option>
+                    <option value="0.005">0.005 m (estándar)</option>
+                    <option value="0.010">0.010 m (tolerante)</option>
+                    <option value="0.015">0.015 m (muy tolerante)</option>
+                  </select>
+                </FormField>
+
+                {/* Divisiones Transversales */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 mt-6 flex items-center gap-2">
+                    <ArrowLeft className="w-5 h-5 text-orange-600" />
+                    <ArrowRight className="w-5 h-5 text-orange-600" />
+                    Divisiones Transversales
+                  </h3>
+                </div>
+
+                <div className="md:col-span-2 space-y-4">
+                  <DivisionesTransversales
+                    titulo="Divisiones Izquierdas (metros)"
+                    divisiones={newProject.divisiones_izquierdas}
+                    tipo="divisiones_izquierdas"
+                    onDivisionChange={handleDivisionChange}
+                    onAddDivision={handleAddDivision}
+                    onRemoveDivision={handleRemoveDivision}
+                    icono={<ArrowLeft className="w-4 h-4 text-orange-600" />}
+                  />
+                  
+                  <DivisionesTransversales
+                    titulo="Divisiones Derechas (metros)"
+                    divisiones={newProject.divisiones_derechas}
+                    tipo="divisiones_derechas"
+                    onDivisionChange={handleDivisionChange}
+                    onAddDivision={handleAddDivision}
+                    onRemoveDivision={handleRemoveDivision}
+                    icono={<ArrowRight className="w-4 h-4 text-orange-600" />}
+                  />
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex space-x-4 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleCreateProject}
+                  disabled={createProyectoCompleto.isPending}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {createProyectoCompleto.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Creando proyecto...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Crear Proyecto
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setMostrarFormulario(false);
+                    setFormErrors({});
+                  }}
+                  className="bg-gray-100 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="flex space-x-4 mt-6">
-            <button
-              onClick={handleCreateProject}
-              disabled={!newProject.nombre || !newProject.km_inicial || !newProject.km_final || createProyectoCompleto.isLoading}
-              className="bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {createProyectoCompleto.isLoading ? 'Creando proyecto y estaciones...' : 'Crear Proyecto'}
-            </button>
-            <button
-              onClick={() => setMostrarFormulario(false)}
-              className="bg-gray-100 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-            >
-              Cancelar
-            </button>
+          {/* Panel de estadísticas */}
+          <div className="xl:col-span-1">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Resumen del Proyecto
+              </h3>
+              
+              {projectStats ? (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-lg p-4">
+                    <div className="text-sm text-gray-600">Longitud total</div>
+                    <div className="text-2xl font-bold text-blue-600">{projectStats.longitud} m</div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-4">
+                    <div className="text-sm text-gray-600">Estaciones a crear</div>
+                    <div className="text-2xl font-bold text-green-600">{projectStats.totalEstaciones}</div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-4">
+                    <div className="text-sm text-gray-600">Intervalos</div>
+                    <div className="text-2xl font-bold text-purple-600">{projectStats.intervalos}</div>
+                  </div>
+
+                  <div className="text-xs text-gray-600 bg-white rounded-lg p-3">
+                    <strong>Nota:</strong> Se crearán automáticamente {projectStats.totalEstaciones} estaciones teóricas 
+                    desde el KM {newProject.km_inicial} hasta el 
+                    KM {newProject.km_final} con intervalos de {newProject.intervalo} metros.
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-500 text-center py-8">
+                  Complete los kilómetros inicial y final para ver las estadísticas del proyecto
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="p-6">
@@ -316,12 +692,24 @@ const Proyectos = () => {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <h3 className="text-red-800 font-medium">Error al cargar proyectos</h3>
-          <p className="text-red-600 mt-1">{error.message}</p>
+          <div className="flex">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-red-800 font-medium">Error al cargar proyectos</h3>
+              <p className="text-red-600 mt-1">{error.message}</p>
+              <button 
+                onClick={refetch}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Intentar nuevamente
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -342,6 +730,11 @@ const Proyectos = () => {
               <span className="text-sm font-medium text-blue-900">
                 Proyecto activo: {proyectoSeleccionado.nombre}
               </span>
+              {proyectoSeleccionado.tramo && (
+                <span className="text-sm text-blue-700">
+                  • {proyectoSeleccionado.tramo}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -353,7 +746,7 @@ const Proyectos = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Buscar proyectos..."
+            placeholder="Buscar por nombre, tramo o cuerpo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -362,7 +755,7 @@ const Proyectos = () => {
 
         <button
           onClick={() => setMostrarFormulario(true)}
-          className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center space-x-2"
+          className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
           <span>Nuevo Proyecto</span>
@@ -388,18 +781,27 @@ const Proyectos = () => {
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-gray-500 mb-4">
-            {searchTerm 
-              ? 'No se encontraron proyectos que coincidan con tu búsqueda'
-              : 'No tienes proyectos creados aún'
-            }
-          </p>
-          <button
-            onClick={() => setMostrarFormulario(true)}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
-          >
-            Crear Primer Proyecto
-          </button>
+          <div className="max-w-md mx-auto">
+            <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 mb-4">
+              {searchTerm 
+                ? 'No se encontraron proyectos que coincidan con tu búsqueda'
+                : 'No tienes proyectos creados aún'
+              }
+            </p>
+            {!searchTerm && (
+              <p className="text-sm text-gray-400 mb-6">
+                Crea tu primer proyecto para comenzar con las mediciones topográficas
+              </p>
+            )}
+            <button
+              onClick={() => setMostrarFormulario(true)}
+              className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center gap-2 mx-auto"
+            >
+              <Plus className="w-4 h-4" />
+              {searchTerm ? 'Crear Nuevo Proyecto' : 'Crear Primer Proyecto'}
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -87,20 +87,9 @@ def create_proyecto(
     db: Session = Depends(get_db)
 ):
     """Crear nuevo proyecto"""
-    # Asignar el usuario actual automáticamente
-    proyecto_data = proyecto.dict()
+    # Asignar el usuario actual automáticamente - EXCLUIR campos generados
+    proyecto_data = proyecto.dict(exclude={'total_estaciones', 'longitud_proyecto'})
     proyecto_data['usuario_id'] = uuid.UUID(current_user.id)
-    
-    # ✅ CALCULAR campos automáticos correctamente
-    km_inicial = float(proyecto_data['km_inicial'])
-    km_final = float(proyecto_data['km_final'])
-    intervalo = float(proyecto_data['intervalo'])
-    
-    longitud = km_final - km_inicial
-    total_estaciones = int(longitud / intervalo) + 1
-    
-    proyecto_data['longitud_proyecto'] = Decimal(str(longitud))
-    proyecto_data['total_estaciones'] = total_estaciones
     
     # ✅ ASEGURAR valores por defecto
     if 'espesor' not in proyecto_data or proyecto_data['espesor'] is None:
@@ -125,20 +114,14 @@ def create_proyecto_completo(
     db: Session = Depends(get_db)
 ):
     """Crear proyecto completo con estaciones automáticas"""
-    # Crear el proyecto base
-    proyecto_data = proyecto.dict(exclude={'generar_estaciones'})
+    # Crear el proyecto base - EXCLUIR campos generados
+    proyecto_data = proyecto.dict(exclude={'generar_estaciones', 'total_estaciones', 'longitud_proyecto'})
     proyecto_data['usuario_id'] = uuid.UUID(current_user.id)
     
-    # ✅ CALCULAR campos automáticos correctamente
+    # ✅ Obtener valores para la creación de estaciones
     km_inicial = float(proyecto_data['km_inicial'])
     km_final = float(proyecto_data['km_final'])
     intervalo = float(proyecto_data['intervalo'])
-    
-    longitud = km_final - km_inicial
-    total_estaciones = int(longitud / intervalo) + 1
-    
-    proyecto_data['longitud_proyecto'] = Decimal(str(longitud))
-    proyecto_data['total_estaciones'] = total_estaciones
     
     # ✅ ASEGURAR valores por defecto
     if 'espesor' not in proyecto_data or proyecto_data['espesor'] is None:
@@ -163,7 +146,7 @@ def create_proyecto_completo(
                 km=Decimal(str(km_actual)),
                 pendiente_derecha=Decimal('0.02'),  # Valor por defecto
                 base_cl=Decimal('1886.140'),  # Valor por defecto basado en tus datos
-                pendiente_izquierda=Decimal('-0.02')  # Valor por defecto
+                # ✅ NO incluir pendiente_izquierda - es generada automáticamente como (- pendiente_derecha)
             )
             db.add(estacion)
             km_actual += intervalo
@@ -188,15 +171,8 @@ def update_proyecto(
     for field, value in update_data.items():
         setattr(proyecto, field, value)
     
-    if recalcular:
-        km_inicial = float(proyecto.km_inicial)
-        km_final = float(proyecto.km_final)
-        intervalo = float(proyecto.intervalo)
-        
-        longitud = km_final - km_inicial
-        total_estaciones = int(longitud / intervalo) + 1
-        proyecto.longitud_proyecto = Decimal(str(longitud))
-        proyecto.total_estaciones = total_estaciones
+    # ✅ NO recalcular campos generados - PostgreSQL los actualiza automáticamente
+    # Los campos total_estaciones y longitud_proyecto son GENERATED ALWAYS
     
     db.commit()
     db.refresh(proyecto)

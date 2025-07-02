@@ -104,6 +104,32 @@ const Campo = () => {
     setValoresLocales({});
   };
 
+  // ✅ NUEVO: Resetear estado cuando cambia el proyecto
+  useEffect(() => {
+    console.log('🔄 Campo.jsx - Proyecto cambió, reseteando estado local');
+    
+    // Limpiar timeouts pendientes
+    Object.values(timeoutsGuardado).forEach(timeout => clearTimeout(timeout));
+    
+    // Resetear estado local cuando cambia el proyecto
+    setEstacionActual(0);
+    setMedicionActiva(null);
+    setValoresLocales({});
+    setTimeoutsGuardado({});
+    setDatoBN({ altura: '', lectura: '' });
+    setVistaActiva('captura');
+    
+    console.log('✅ Campo.jsx - Estado local reseteado para nuevo proyecto:', proyecto?.id);
+  }, [proyecto?.id]); // Solo reaccionar al cambio de proyecto ID
+
+  // ✅ NUEVO: Refrescar lecturas cuando cambia la medición activa
+  useEffect(() => {
+    if (medicionActiva?.id && refetchLecturas) {
+      console.log('🔄 Campo.jsx - Refrescando lecturas para medición:', medicionActiva.id);
+      refetchLecturas();
+    }
+  }, [medicionActiva?.id, refetchLecturas]);
+
   // ✅ CORREGIDO: Medición activa para la estación actual
   useEffect(() => {
     const cambiarMedicion = async () => {
@@ -120,6 +146,10 @@ const Campo = () => {
         });
         
         setMedicionActiva(medicion || null);
+        console.log('🎯 Campo.jsx - Medición activa establecida:', medicion?.id);
+      } else {
+        setMedicionActiva(null);
+        console.log('⚪ Campo.jsx - No hay mediciones disponibles, medicionActiva = null');
       }
     };
 

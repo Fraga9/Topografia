@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DECIMAL, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, DECIMAL, DateTime, Text, ForeignKey, UniqueConstraint, Computed
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
@@ -15,7 +15,8 @@ class EstacionTeorica(Base):
     km = Column(DECIMAL(10, 3), nullable=False)
     pendiente_derecha = Column(DECIMAL(8, 6), nullable=False)
     base_cl = Column(DECIMAL(10, 6), nullable=False)
-    pendiente_izquierda = Column(DECIMAL(8, 6), nullable=True)
+    # ✅ Campo generado por PostgreSQL - no se incluye en INSERT
+    pendiente_izquierda = Column(DECIMAL(8, 6), Computed("(- pendiente_derecha)"), nullable=True)
     fecha_captura = Column(DateTime(timezone=True), server_default=func.now())
     observaciones = Column(Text, nullable=True)
     

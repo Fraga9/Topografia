@@ -1,6 +1,8 @@
 // context/ProyectoContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { queryKeys } from '../utils/queryKeys';
 
 const ProyectoContext = createContext();
 
@@ -14,6 +16,7 @@ export const useProyectoSeleccionado = () => {
 
 export const ProyectoProvider = ({ children }) => {
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
+  const queryClient = useQueryClient();
 
   // Cargar proyecto desde localStorage al inicializar y refrescar desde Supabase
   useEffect(() => {
@@ -48,7 +51,63 @@ export const ProyectoProvider = ({ children }) => {
   }, [proyectoSeleccionado]);
 
   const seleccionarProyecto = (proyecto) => {
+    console.log('🔄 Cambiando proyecto seleccionado:', proyecto);
+    
+    // Si hay un proyecto anterior, limpiar sus queries
+    if (proyectoSeleccionado && proyectoSeleccionado.id !== proyecto?.id) {
+      console.log('🧹 Limpiando queries del proyecto anterior:', proyectoSeleccionado.id);
+      
+      // Cancelar queries en curso del proyecto anterior usando los query keys correctos
+      queryClient.cancelQueries({ queryKey: queryKeys.estacion.listByProyecto(proyectoSeleccionado.id) });
+      queryClient.cancelQueries({ queryKey: queryKeys.medicion.listByProyecto(proyectoSeleccionado.id) });
+      queryClient.cancelQueries({ queryKey: queryKeys.proyecto.estaciones(proyectoSeleccionado.id) });
+      queryClient.cancelQueries({ queryKey: queryKeys.proyecto.mediciones(proyectoSeleccionado.id) });
+      
+      // Cancelar TODAS las queries de lecturas del proyecto anterior
+      queryClient.cancelQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            // Lecturas genéricas
+            key[0] === queryKeys.lecturas ||
+            // Lecturas por patrón específico
+            (Array.isArray(key) && key.includes('lecturas')) ||
+            (Array.isArray(key) && key.includes('byMedicion'))
+          );
+        }
+      });
+    }
+    
     setProyectoSeleccionado(proyecto);
+    
+    // Si hay un nuevo proyecto, forzar refresh de sus datos
+    if (proyecto?.id) {
+      console.log('🔄 Invalidando queries del nuevo proyecto:', proyecto.id);
+      
+      // Invalidar queries del nuevo proyecto para forzar refresh usando los query keys correctos
+      queryClient.invalidateQueries({ queryKey: queryKeys.estacion.listByProyecto(proyecto.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.medicion.listByProyecto(proyecto.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.estaciones(proyecto.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.mediciones(proyecto.id) });
+      
+      // Invalidar TODAS las queries de lecturas para que se recarguen con el nuevo proyecto
+      // Esto invalidará tanto las genéricas como las específicas por medición
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            // Lecturas genéricas
+            key[0] === queryKeys.lecturas ||
+            // Lecturas por patrón específico
+            (Array.isArray(key) && key.includes('lecturas')) ||
+            (Array.isArray(key) && key.includes('byMedicion'))
+          );
+        }
+      });
+      
+      // También invalidar el detalle del proyecto
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.detail(proyecto.id) });
+    }
   };
 
   // Función para actualizar proyecto desde tiempo real
@@ -80,11 +139,40 @@ export const ProyectoProvider = ({ children }) => {
     setProyectoSeleccionado(null);
   };
 
+  // Función para refrescar manualmente los datos del proyecto actual
+  const refrescarDatosProyecto = () => {
+    if (proyectoSeleccionado?.id) {
+      console.log('🔄 Refrescando datos del proyecto actual:', proyectoSeleccionado.id);
+      
+      // Invalidar todas las queries relacionadas con el proyecto actual
+      queryClient.invalidateQueries({ queryKey: queryKeys.estacion.listByProyecto(proyectoSeleccionado.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.medicion.listByProyecto(proyectoSeleccionado.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.estaciones(proyectoSeleccionado.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.mediciones(proyectoSeleccionado.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.detail(proyectoSeleccionado.id) });
+      
+      // Invalidar TODAS las queries de lecturas
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            // Lecturas genéricas
+            key[0] === queryKeys.lecturas ||
+            // Lecturas por patrón específico
+            (Array.isArray(key) && key.includes('lecturas')) ||
+            (Array.isArray(key) && key.includes('byMedicion'))
+          );
+        }
+      });
+    }
+  };
+
   const value = {
     proyectoSeleccionado,
     seleccionarProyecto,
     limpiarProyecto,
     actualizarProyectoDesdeSupabase,
+    refrescarDatosProyecto,
   };
 
   return (

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DECIMAL, DateTime, Text, ForeignKey, Computed
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -23,8 +23,9 @@ class Proyecto(Base):
     tolerancia_sct = Column(DECIMAL(8, 6), nullable=False, default=0.005)
     divisiones_izquierdas = Column(JSONB, nullable=True)
     divisiones_derechas = Column(JSONB, nullable=True)
-    total_estaciones = Column(Integer, nullable=True)
-    longitud_proyecto = Column(DECIMAL(10, 3), nullable=True)
+    # ✅ Campos generados por PostgreSQL - no se incluyen en INSERT
+    total_estaciones = Column(Integer, Computed("ceil(((km_final - km_inicial) / intervalo))"), nullable=True)
+    longitud_proyecto = Column(DECIMAL(10, 3), Computed("(km_final - km_inicial)"), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     fecha_modificacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     estado = Column(String(20), default="CONFIGURACION")

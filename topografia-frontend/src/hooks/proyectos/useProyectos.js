@@ -96,6 +96,9 @@ export const useCreateProyecto = () => {
       // Invalidar las listas para que se recarguen con el nuevo proyecto
       queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.lists() });
       
+      // ✅ IMPORTANTE: Invalidar también la query de mis_proyectos
+      queryClient.invalidateQueries({ queryKey: ['mis_proyectos'] });
+      
       // Agregar el nuevo proyecto al cache de detalles
       queryClient.setQueryData(queryKeys.proyecto.detail(data.id), data);
       
@@ -129,6 +132,9 @@ export const useCreateProyectoCompleto = () => {
       // Invalidar múltiples caches porque este proyecto incluye estaciones
       queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.estacion.lists() });
+      
+      // ✅ IMPORTANTE: Invalidar también la query de mis_proyectos para mostrar el nuevo proyecto
+      queryClient.invalidateQueries({ queryKey: ['mis_proyectos'] });
       
       // Cachear tanto el proyecto como sus estaciones
       queryClient.setQueryData(queryKeys.proyecto.detail(data.id), data);
@@ -171,6 +177,9 @@ export const useUpdateProyecto = () => {
       // Invalidar las listas para reflejar cualquier cambio en nombres, estados, etc.
       queryClient.invalidateQueries({ queryKey: queryKeys.proyecto.lists() });
       
+      // ✅ IMPORTANTE: Invalidar también la query de mis_proyectos
+      queryClient.invalidateQueries({ queryKey: ['mis_proyectos'] });
+      
       console.log('Proyecto actualizado exitosamente:', proyectoId);
     },
     
@@ -203,6 +212,9 @@ export const useDeleteProyecto = () => {
       // Invalidar todas las listas y datos relacionados
       invalidationHelpers.invalidateProyecto(queryClient, proyectoId);
       invalidationHelpers.invalidateLists(queryClient);
+      
+      // ✅ IMPORTANTE: Invalidar también la query de mis_proyectos
+      queryClient.invalidateQueries({ queryKey: ['mis_proyectos'] });
       
       console.log('Proyecto eliminado exitosamente:', proyectoId);
     },
