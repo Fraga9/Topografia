@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useProyecto } from '../hooks/useProyecto';
 import { useEstaciones, useMediciones } from '../hooks';
 import { useLecturas } from '../hooks/lecturas';
-import { ReporteEstaciones, ReporteAvance, ReporteDiseno } from '../components/reportes';
+import { ReporteLiberacionTopografia } from '../components/reportes';
 import PDFService from '../services/pdfService';
+import PDFMakeComplete from '../services/pdfMakeComplete';
 
 const Reportes = () => {
-  const [tipoReporte, setTipoReporte] = useState('estaciones');
+  const [tipoReporte, setTipoReporte] = useState('liberacion');
   const [isGenerating, setIsGenerating] = useState(false);
   
   // Obtener datos del proyecto seleccionado
@@ -23,43 +24,44 @@ const Reportes = () => {
     isLoading: loadingMediciones 
   } = useMediciones({ proyecto_id: proyecto?.id, enabled: !!proyecto?.id });
 
-  // Obtener todas las lecturas del proyecto
-  const { 
-    data: lecturas = [], 
-    isLoading: loadingLecturas 
-  } = useLecturas(null, { 
-    enabled: !!proyecto?.id,
-    select: (data) => {
-      // Filtrar lecturas que pertenezcan a mediciones de este proyecto
-      const medicionIds = mediciones.map(m => m.id);
-      return data?.filter(lectura => medicionIds.includes(lectura.medicion_id)) || [];
-    }
-  });
+  // Crear array fijo para mantener orden de hooks - mismo patrón que Analisis.jsx
+  const medicionesSeguras = Array.isArray(mediciones) ? mediciones : [];
+  
+  // Obtener todas las lecturas de todas las mediciones - SIEMPRE ejecutar con array fijo
+  const lecturasQueries = [
+    // Máximo 20 consultas simultáneas para evitar problemas de rendimiento
+    ...Array.from({ length: Math.max(20, medicionesSeguras.length) }, (_, index) => {
+      const medicion = medicionesSeguras[index];
+      return useLecturas(
+        medicion?.id || null, 
+        {}, 
+        { enabled: !!medicion?.id }
+      );
+    })
+  ];
+
+  // Consolidar todas las lecturas - mismo patrón que Analisis.jsx
+  const lecturas = useMemo(() => {
+    return lecturasQueries
+      .slice(0, medicionesSeguras.length) // Solo usar las queries que corresponden a mediciones reales
+      .map(query => query?.data || [])
+      .flat()
+      .filter(lectura => lectura && lectura.elv_base_real !== null);
+  }, [lecturasQueries, medicionesSeguras.length]);
+
+  // Calcular estado de carga
+  const loadingLecturas = lecturasQueries
+    .slice(0, medicionesSeguras.length)
+    .some(query => query.isLoading);
 
   const tiposReporte = [
     {
-      id: 'estaciones',
-      nombre: 'Resultados por Estación',
-      descripcion: 'PDF profesional con tablas detalladas de elevaciones, diferencias y clasificaciones por estación',
-      icon: '📊',
+      id: 'liberacion',
+      nombre: 'Liberación de Pavimentación por Topografía',
+      descripcion: 'Reporte oficial TOP-FM-05 con análisis volumétrico, estadísticas de espesores y verificación de especificaciones SCT',
+      icon: '📋',
       color: 'red',
-      requerimientos: ['mediciones', 'lecturas']
-    },
-    {
-      id: 'avance',
-      nombre: 'Avance del Proyecto',
-      descripcion: 'PDF ejecutivo con métricas de progreso, productividad y análisis de calidad',
-      icon: '📈',
-      color: 'blue',
-      requerimientos: ['estaciones']
-    },
-    {
-      id: 'diseno',
-      nombre: 'Diseño y Especificaciones',
-      descripcion: 'PDF técnico con especificaciones, geometría y tabla de estaciones teóricas',
-      icon: '📐',
-      color: 'indigo',
-      requerimientos: ['estaciones']
+      requerimientos: ['estaciones_configuradas', 'mediciones_registradas', 'lecturas_capturadas']
     }
   ];
 
@@ -70,43 +72,21 @@ const Reportes = () => {
     try {
       console.log('Generando reporte PDF:', reporteData);
       
-      // Crear instancia del servicio PDF
-      const pdfService = new PDFService();
+      // Crear instancia del servicio PDF completo con pdfMake
+      const pdfService = new PDFMakeComplete();
       
       // Generar PDF según el tipo de reporte
-      let doc;
+      let pdfDoc;
       const fechaHora = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
       let nombreArchivo;
       
       switch (reporteData.tipo) {
-        case 'estaciones':
-          doc = await pdfService.generateEstacionesReport(
+        case 'liberacion_topografia':
+          pdfDoc = await pdfService.generateLiberacionTopografiaReport(
             proyecto, 
-            estaciones, 
-            mediciones, 
-            lecturas
+            reporteData.datosReporte
           );
-          nombreArchivo = `Reporte_Estaciones_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaHora}.pdf`;
-          break;
-          
-        case 'avance':
-          doc = await pdfService.generateAvanceReport(
-            proyecto, 
-            estaciones, 
-            mediciones, 
-            lecturas, 
-            reporteData.estadisticasProgreso
-          );
-          nombreArchivo = `Reporte_Avance_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaHora}.pdf`;
-          break;
-          
-        case 'diseno':
-          doc = await pdfService.generateDisenoReport(
-            proyecto, 
-            estaciones, 
-            reporteData.especificacionesTecnicas
-          );
-          nombreArchivo = `Reporte_Diseño_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaHora}.pdf`;
+          nombreArchivo = `Liberacion_Topografia_TOP-FM-05_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaHora}.pdf`;
           break;
           
         default:
@@ -114,6 +94,7 @@ const Reportes = () => {
       }
       
       // Descargar el PDF
+      pdfService.lastGeneratedPdf = pdfDoc;
       pdfService.downloadPDF(nombreArchivo);
       
       // Mostrar mensaje de éxito
@@ -132,9 +113,9 @@ const Reportes = () => {
   // Verificar si se cumplen los requerimientos para cada tipo de reporte
   const verificarRequerimientos = (requerimientos) => {
     const checks = {
-      estaciones: estaciones.length > 0,
-      mediciones: mediciones.length > 0,
-      lecturas: lecturas.length > 0
+      estaciones_configuradas: estaciones.length > 0, // EstacionTeorica - estaciones con diseño definido
+      mediciones_registradas: mediciones.length > 0,  // MedicionEstacion - mediciones de campo
+      lecturas_capturadas: lecturas.length > 0        // LecturaDivision - lecturas de divisiones transversales
     };
     
     return requerimientos.every(req => checks[req]);
@@ -213,7 +194,7 @@ const Reportes = () => {
 
         {/* Selector de tipo de reporte */}
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-white/40">
-          <h2 className="text-xl font-semibold text-slate-800 mb-6">Seleccionar Tipo de Reporte</h2>
+          <h2 className="text-xl font-semibold text-slate-800 mb-6">Reporte de Liberación de Pavimentación</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {tiposReporte.map((tipo) => {
@@ -260,15 +241,15 @@ const Reportes = () => {
                           <ul className="mt-1 space-y-1">
                             {tipo.requerimientos.map(req => {
                               const checks = {
-                                estaciones: estaciones.length > 0,
-                                mediciones: mediciones.length > 0,
-                                lecturas: lecturas.length > 0
+                                estaciones_configuradas: estaciones.length > 0,
+                                mediciones_registradas: mediciones.length > 0,
+                                lecturas_capturadas: lecturas.length > 0
                               };
                               if (!checks[req]) {
                                 const nombres = {
-                                  estaciones: 'Estaciones definidas',
-                                  mediciones: 'Mediciones registradas',
-                                  lecturas: 'Lecturas capturadas'
+                                  estaciones_configuradas: 'Estaciones configuradas (diseño definido)',
+                                  mediciones_registradas: 'Mediciones registradas (campo)',
+                                  lecturas_capturadas: 'Lecturas capturadas (divisiones transversales)'
                                 };
                                 return <li key={req}>• {nombres[req]}</li>;
                               }
@@ -288,32 +269,12 @@ const Reportes = () => {
         {/* Componente de reporte seleccionado */}
         {tipoReporte && verificarRequerimientos(tipoReporteSeleccionado.requerimientos) && (
           <div className="transition-all duration-500 ease-in-out">
-            {tipoReporte === 'estaciones' && (
-              <ReporteEstaciones
+            {tipoReporte === 'liberacion' && (
+              <ReporteLiberacionTopografia
                 proyecto={proyecto}
                 estaciones={estaciones}
                 mediciones={mediciones}
                 lecturas={lecturas}
-                onGenerar={handleGenerarReporte}
-                isGenerating={isGenerating}
-              />
-            )}
-            
-            {tipoReporte === 'avance' && (
-              <ReporteAvance
-                proyecto={proyecto}
-                estaciones={estaciones}
-                mediciones={mediciones}
-                lecturas={lecturas}
-                onGenerar={handleGenerarReporte}
-                isGenerating={isGenerating}
-              />
-            )}
-            
-            {tipoReporte === 'diseno' && (
-              <ReporteDiseno
-                proyecto={proyecto}
-                estaciones={estaciones}
                 onGenerar={handleGenerarReporte}
                 isGenerating={isGenerating}
               />
@@ -327,15 +288,18 @@ const Reportes = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <div className="text-2xl font-bold text-blue-600">{estaciones.length}</div>
-              <div className="text-sm text-blue-800">Estaciones Definidas</div>
+              <div className="text-sm text-blue-800">Estaciones Configuradas</div>
+              <div className="text-xs text-blue-600">Diseño definido</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-2xl font-bold text-green-600">{mediciones.length}</div>
               <div className="text-sm text-green-800">Mediciones Registradas</div>
+              <div className="text-xs text-green-600">Campo</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
               <div className="text-2xl font-bold text-purple-600">{lecturas.length}</div>
               <div className="text-sm text-purple-800">Lecturas Capturadas</div>
+              <div className="text-xs text-purple-600">Divisiones transversales</div>
             </div>
             <div className="text-center p-4 bg-amber-50 rounded-lg">
               <div className="text-2xl font-bold text-amber-600">
