@@ -68,9 +68,9 @@ class PDFMakeWorking {
 
       const docDefinition = {
         pageSize: 'A4',
-        pageOrientation: 'landscape', // Cambiar a horizontal para acomodar todas las columnas
-        pageMargins: [15, 15, 15, 15],
-        
+        pageOrientation: 'portrait', // Cambiar a horizontal para acomodar todas las columnas
+        pageMargins: [25, 25, 25, 25],  // [left, top, right, bottom]
+
         content: [
           // Header principal
           this.createHeader(proyecto),
@@ -143,15 +143,16 @@ class PDFMakeWorking {
   createHeader(proyecto) {
     return {
       table: {
-        widths: [80, '*', 80],
+        widths: [100, '*', 100],
         body: [
           [
             // Logo CEMEX
             this.logoDataUrl ? {
               image: this.logoDataUrl,
-              width: 60,
-              height: 30,
-              alignment: 'center'
+              width: 83,
+              height: 15,
+              alignment: 'center',
+              margin: [0, 25] // [left/right, top/bottom]
             } : {
               text: 'CEMEX',
               fontSize: 16,
@@ -166,7 +167,7 @@ class PDFMakeWorking {
               fontSize: 14,
               bold: true,
               alignment: 'center',
-              margin: [0, 5, 0, 5]
+              margin: [25, 5, 25, 5]
             },
             
             // Información del código y versión
@@ -204,7 +205,7 @@ class PDFMakeWorking {
     
     return {
       table: {
-        widths: [25, 70, 25, 70, 20, 30, 20, 30],
+        widths: [50, 90, 50, 50, 70, 50, 70, '*'],
         body: [
           [
             { text: 'PROYECTO:', fontSize: 8, bold: true, fillColor: '#E8E8E8' },
@@ -309,7 +310,20 @@ class PDFMakeWorking {
     return {
       table: {
         headerRows: 1,
-        widths: [50, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
+        widths: [
+            'auto', // ESTACIÓN (se ajusta al contenido)
+            'auto', // ELEVACIÓN CAMPO
+            'auto', // ELEVACIÓN PROYECTO
+            'auto', // DIFERENCIA TERR
+            'auto', // RT PROYECTO
+            'auto', // CAMPO RTE
+            'auto', // ESPESOR PROM
+            'auto', // ÁREA (m²)
+            'auto', // VOL. PARCIAL
+            'auto', // VOL. ACUMULADO
+            'auto', // PROY. PARCIAL
+            'auto'  // PROY. ACUMULADO
+        ],
         body: [...headers, ...dataRows]
       },
       layout: {
@@ -341,7 +355,7 @@ class PDFMakeWorking {
         },
         {
           table: {
-            widths: [120, 60, 120, 60],
+            widths: ['*', 'auto', '*', 'auto'], // Distribución flexible para las etiquetas, auto para los valores
             body: [
               [
                 { text: 'DATO MÁXIMO:', fontSize: 8, bold: true },
@@ -395,7 +409,7 @@ class PDFMakeWorking {
         // Verificación de cumplimiento
         {
           table: {
-            widths: [180, 80],
+            widths: ['*', 'auto'], // Flexible para el texto, auto para el valor
             body: [
               [
                 { text: 'ESPESOR PROMEDIO CORRESPONDIENTE A TODAS LAS DETERMINACIONES:', fontSize: 8, bold: true },
@@ -431,7 +445,7 @@ class PDFMakeWorking {
         },
         {
           table: {
-            widths: [150, 80],
+            widths: ['*', 'auto'], // Flexible para el texto, auto para el valor
             body: [
               [
                 { text: 'VOLUMEN DE PROYECTO', fontSize: 9, bold: true },
