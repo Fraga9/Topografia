@@ -2,3 +2,4 @@
 export { authService } from './authService';
 export { projectService } from './projectService';
 export { calculationService } from './calculationService';
+export { default as pdfMakeWorking } from './pdfMakeWorking';

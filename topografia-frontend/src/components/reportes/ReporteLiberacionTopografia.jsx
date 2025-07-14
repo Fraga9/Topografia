@@ -28,67 +28,88 @@ const ReporteLiberacionTopografia = ({
 
     // Datos por estación con cálculos volumétricos
     const estacionesData = [];
-    let volumenAcumulado = 0;
-    let volumenProyectoTotal = 0;
-    let volumenRealTotal = 0;
+    let volumenAcumuladoReal = 0;
+    let volumenAcumuladoProyecto = 0;
     
     // Estadísticas para análisis de espesores
     const diferenciasEspesor = [];
     
-    mediciones.forEach(medicion => {
+    // Ordenar mediciones por estación KM
+    const medicionesOrdenadas = [...mediciones].sort((a, b) => a.estacion_km - b.estacion_km);
+    
+    medicionesOrdenadas.forEach((medicion, index) => {
       const lecturasEstacion = lecturas.filter(l => l.medicion_id === medicion.id);
       
       if (lecturasEstacion.length > 0) {
-        // Calcular datos por estación
-        const corteTerr = lecturasEstacion.map(l => l.elv_base_real).filter(e => e !== null);
-        const rtProyecto = lecturasEstacion.map(l => l.elv_base_proyecto).filter(e => e !== null);
+        // Ordenar lecturas por división transversal
+        const lecturasOrdenadas = [...lecturasEstacion].sort((a, b) => a.division_transversal - b.division_transversal);
         
-        if (corteTerr.length > 0 && rtProyecto.length > 0) {
-          const corteTerrPromedio = corteTerr.reduce((a, b) => a + parseFloat(b), 0) / corteTerr.length;
-          const rtProyectoPromedio = rtProyecto.reduce((a, b) => a + parseFloat(b), 0) / rtProyecto.length;
+        // Calcular elevaciones promedio para la estación
+        const elevacionesCampo = lecturasOrdenadas
+          .map(l => l.elv_base_real)
+          .filter(e => e !== null && e !== undefined);
+        const elevacionesProyecto = lecturasOrdenadas
+          .map(l => l.elv_base_proyecto)
+          .filter(e => e !== null && e !== undefined);
+        
+        if (elevacionesCampo.length > 0 && elevacionesProyecto.length > 0) {
+          const elevacionCampoPromedio = elevacionesCampo.reduce((a, b) => a + parseFloat(b), 0) / elevacionesCampo.length;
+          const elevacionProyectoPromedio = elevacionesProyecto.reduce((a, b) => a + parseFloat(b), 0) / elevacionesProyecto.length;
           
-          // Diferencia real vs proyecto (espesor medido vs proyectado)
-          const diferencia = corteTerrPromedio - rtProyectoPromedio;
-          diferenciasEspesor.push(diferencia);
+          // Diferencia terreno (elevación real vs diseño)
+          const diferenciaTerr = elevacionCampoPromedio - elevacionProyectoPromedio;
           
-          // Espesor promedio = diferencia si se muestrea un solo punto
-          const espesorPromedio = diferencia;
+          // Elevación RT Proyecto (elevación de proyecto + espesor teórico)
+          const rtProyecto = elevacionProyectoPromedio + proyecto.espesor;
           
-          // Área de influencia (intervalo del proyecto * ancho promedio)
-          const area = proyecto.intervalo * 7.5; // 7.5m ancho promedio
+          // Espesor real medido en campo
+          const espesorRealPromedio = elevacionCampoPromedio - elevacionProyectoPromedio;
+          diferenciasEspesor.push(espesorRealPromedio);
           
-          // Volumen parcial = espesor * área
-          const volumenParcial = espesorPromedio * area;
-          volumenAcumulado += volumenParcial;
+          // Área de influencia según intervalo del proyecto
+          // Ancho de calzada estándar para carreteras (variable según proyecto)
+          const anchoPavimento = 7.5; // metros - ancho estándar de calzada
+          const area = proyecto.intervalo * anchoPavimento;
           
-          // Volumen de proyecto (teórico)
-          const volumenProyectoEstacion = proyecto.espesor * area;
-          volumenProyectoTotal += volumenProyectoEstacion;
-          volumenRealTotal += volumenParcial;
+          // Volúmenes por estación
+          const volumenRealParcial = espesorRealPromedio * area;
+          const volumenProyectoParcial = proyecto.espesor * area;
           
-          // Datos para divisiones individuales
-          const divisiones = lecturasEstacion.map(lectura => ({
-            posicion: lectura.posicion ? lectura.posicion.toFixed(3) : '',
-            elevacionCampo: lectura.elv_base_real || 0,
-            elevacionProyecto: lectura.elv_base_proyecto || 0,
-            diferencia: (lectura.elv_base_real || 0) - (lectura.elv_base_proyecto || 0)
-          }));
+          // Acumular volúmenes
+          volumenAcumuladoReal += volumenRealParcial;
+          volumenAcumuladoProyecto += volumenProyectoParcial;
+          
+          // Crear datos de divisiones individuales para el PDF
+          const divisiones = lecturasOrdenadas.map(lectura => {
+            const posicionAbsoluta = parseFloat(lectura.division_transversal) || 0;
+            return {
+              posicion: posicionAbsoluta.toFixed(3),
+              elevacionCampo: parseFloat(lectura.elv_base_real) || 0,
+              elevacionProyecto: parseFloat(lectura.elv_base_proyecto) || 0,
+              diferencia: (parseFloat(lectura.elv_base_real) || 0) - (parseFloat(lectura.elv_base_proyecto) || 0),
+              rtProyecto: (parseFloat(lectura.elv_base_proyecto) || 0) + parseFloat(proyecto.espesor || 0),
+              determinacionVolRte: parseFloat(lectura.elv_base_real) || 0
+            };
+          });
 
           estacionesData.push({
             estacion: formatearKM(medicion.estacion_km),
-            campoElevacion: corteTerrPromedio,
-            proyectoElevacion: rtProyectoPromedio,
-            diferencia: diferencia,
-            espesorPromedio: espesorPromedio,
+            campoElevacion: elevacionCampoPromedio,
+            proyectoElevacion: elevacionProyectoPromedio,
+            diferenciaTerr: diferenciaTerr,
+            rtProyecto: rtProyecto,
+            espesorPromedio: espesorRealPromedio,
             area: area,
-            volumenParcial: volumenParcial,
-            volumenAcumulado: volumenAcumulado,
-            volumenProyectoParcial: volumenProyectoEstacion,
-            volumenProyectoAcumulado: volumenProyectoTotal,
-            corteTerreno: corteTerrPromedio,
-            rtProyecto: rtProyectoPromedio,
-            realRtProyecto: diferencia,
-            divisiones: divisiones
+            volumenParcial: volumenRealParcial,
+            volumenAcumulado: volumenAcumuladoReal,
+            volumenProyectoParcial: volumenProyectoParcial,
+            volumenProyectoAcumulado: volumenAcumuladoProyecto,
+            corteTerreno: elevacionCampoPromedio,
+            realRtProyecto: diferenciaTerr,
+            divisiones: divisiones,
+            // Datos adicionales para cálculos
+            medicionId: medicion.id,
+            estacionKm: medicion.estacion_km
           });
         }
       }
@@ -124,9 +145,10 @@ const ReporteLiberacionTopografia = ({
     
     return {
       estacionesData,
-      volumenProyecto: volumenProyectoTotal,
-      volumenRealBase: volumenRealTotal,
-      volumenExcedente: volumenRealTotal - volumenProyectoTotal,
+      volumenProyecto: volumenAcumuladoProyecto,
+      volumenRealBase: volumenAcumuladoReal,
+      volumenExcedente: volumenAcumuladoReal - volumenAcumuladoProyecto,
+      proyecto: proyecto,
       estadisticas: {
         datoMaximo,
         datoMinimo,
@@ -153,10 +175,12 @@ const ReporteLiberacionTopografia = ({
   const handleGenerarPDF = () => {
     const reporteData = {
       tipo: 'liberacion_topografia',
-      proyecto,
-      datosReporte,
-      encargados: proyecto.encargados || [],
-      fechaGeneracion: new Date().toISOString()
+      datosReporte: {
+        ...datosReporte,
+        proyecto: proyecto,
+        fechaGeneracion: new Date().toISOString(),
+        encargados: proyecto.encargados || []
+      }
     };
     
     onGenerar(reporteData);

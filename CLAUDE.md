@@ -34,6 +34,11 @@ python main.py                     # Alternative start method
 ### Database Setup
 The project uses Supabase PostgreSQL with automatic table creation on startup. No manual migration commands are needed as SQLAlchemy handles table creation automatically.
 
+### Environment Configuration
+Both frontend and backend require environment setup:
+- **Backend**: Copy `.env.example` to `.env` and configure Supabase credentials
+- **Frontend**: Copy `.env.example` to `.env` and set Vite environment variables
+
 ## Key Architecture Patterns
 
 ### Frontend Hook-Based Architecture
@@ -127,6 +132,13 @@ Row Level Security (RLS) is enabled in Supabase, ensuring users only access thei
 
 ### Testing API Endpoints
 Use the automatically generated documentation at `http://localhost:8000/docs` for interactive testing, or refer to `API_TESTING.md` for curl examples.
+
+### Testing Infrastructure
+Currently, the project uses manual testing approaches:
+- **API Testing**: Comprehensive curl commands in `topografia-backend/API_TESTING.md`
+- **Frontend Testing**: Development server testing with Vite dev tools
+- **No Automated Tests**: Neither frontend nor backend have automated test suites implemented yet
+- **Future Testing**: Project is prepared for pytest (backend) and Vitest/Testing Library (frontend)
 
 ### Working with Calculations
 Topographic calculations are handled automatically by database triggers for basic operations. Complex calculations are implemented in frontend services. Always validate against SCT tolerances for compliance.

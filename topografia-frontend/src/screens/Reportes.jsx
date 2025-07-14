@@ -3,8 +3,7 @@ import { useProyecto } from '../hooks/useProyecto';
 import { useEstaciones, useMediciones } from '../hooks';
 import { useLecturas } from '../hooks/lecturas';
 import { ReporteLiberacionTopografia } from '../components/reportes';
-import PDFService from '../services/pdfService';
-import PDFMakeComplete from '../services/pdfMakeComplete';
+import PDFMakeWorking from '../services/pdfMakeWorking';
 
 const Reportes = () => {
   const [tipoReporte, setTipoReporte] = useState('liberacion');
@@ -72,8 +71,8 @@ const Reportes = () => {
     try {
       console.log('Generando reporte PDF:', reporteData);
       
-      // Crear instancia del servicio PDF completo con pdfMake
-      const pdfService = new PDFMakeComplete();
+      // Crear instancia del servicio PDF que funciona
+      const pdfService = new PDFMakeWorking();
       
       // Generar PDF según el tipo de reporte
       let pdfDoc;
@@ -86,7 +85,7 @@ const Reportes = () => {
             proyecto, 
             reporteData.datosReporte
           );
-          nombreArchivo = `Liberacion_Topografia_TOP-FM-05_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaHora}.pdf`;
+          nombreArchivo = `Liberacion_Topografia_TOP-FM-05_${proyecto.nombre.replace(/[^a-zA-Z0-9\s]/g, '_')}_${fechaHora}.pdf`;
           break;
           
         default:
@@ -99,12 +98,12 @@ const Reportes = () => {
       
       // Mostrar mensaje de éxito
       setTimeout(() => {
-        alert(`Reporte "${nombreArchivo}" generado y descargado exitosamente.`);
+        console.log(`Reporte "${nombreArchivo}" generado y descargado exitosamente.`);
       }, 500);
       
     } catch (error) {
       console.error('Error generando reporte PDF:', error);
-      alert('Error al generar el reporte PDF. Por favor intenta nuevamente.');
+      alert(`Error al generar el reporte PDF: ${error.message}\n\nPor favor verifica que:\n1. El proyecto tenga mediciones registradas\n2. Las lecturas estén capturadas\n3. Los datos estén completos`);
     } finally {
       setIsGenerating(false);
     }
